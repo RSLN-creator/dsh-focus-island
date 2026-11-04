@@ -1,0 +1,5 @@
+# local dev output
+node_modules/
+# local verification screenshots / probes
+verify/shots/
+verify/*.log

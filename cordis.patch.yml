@@ -1,0 +1,6 @@
+# dsh-focus-island bundle patch: one row for the dual-face plugin.
+# Host half: optional system-resource sampler + its same-origin HTTP route.
+# Client half: the floating "focus island" in `shell.overlay`.
+- insert:
+    - id: dsh-focus-island
+      name: 'dsh-focus-island'

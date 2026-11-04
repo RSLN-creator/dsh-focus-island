@@ -1,0 +1,47 @@
+{
+  "name": "dsh-focus-island",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DeepSeek Harness 插件：右上角灵动岛式「惜时岛」——你只是坐着看 AI 生成、没有参与对话时自动计时，到点提醒这段时间被 AI 一个人用掉了；可展开看本机 CPU/GPU/内存/温度。",
+  "keywords": [
+    "deepseek",
+    "harness",
+    "dsh",
+    "cordis",
+    "plugin",
+    "timer",
+    "focus",
+    "island"
+  ],
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/host-monitor.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  }
+}
