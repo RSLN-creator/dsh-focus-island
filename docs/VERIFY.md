@@ -10,8 +10,10 @@
 | 生成物与源一致 | `node build.mjs --check` | `lib/client.js is up to date` |
 | 计时状态机 | `node verify/core.test.mjs` | **PASS 41 tests** |
 | 资源采样与轮询 | `node verify/monitor.test.mjs` | **17 checks passed** |
-| 视觉树 / 布局结构 / 令牌 | `node verify/widget-smoke.mjs` | **291 checks passed** |
-| 整体装配 | `node verify/integration-smoke.mjs` | `integration smoke: OK` |
+| 视觉树 / 布局结构 / 令牌 | `node verify/widget-smoke.mjs` | **329 checks passed** |
+| 整体装配 | 
+ode verify/integration-smoke.mjs | `integration smoke: OK` |
+| 通知/提示音 | `node verify/notify-smoke.mjs` | `notify smoke: OK`（默认开 → 1 条通知 + 和弦；两个都关 → 全静默） |
 
 `integration-smoke.mjs` 断言（伪浏览器 + 伪 Cordis 驱动生成后的 `lib/client.js`）：
 
@@ -62,3 +64,9 @@ Host 半（资源路由）验证：bundle 关/开一次后，
 - 岛内中英文切换；
 - 拖动右栏时位置逐帧跟随（拖动中禁用过渡）；
 - 计时 tick 250 ms。
+
+## 6. 第四轮改动摘要
+
+- 通知 + 提示音：`lib/notify.js`（受控 `Notification` 包装 + Web Audio 合成音型，参考 `@dingyi222666/dsh-session-notification`，BSD-3-Clause）；
+  在「被动到点」「任务到点」两个状态边沿各触发一次，两个开关默认开启，设置 → 通知里可分别关闭并各自带「测试」按钮。
+- 收缩态缝隙：去掉 `.dfi-card` 上的 `--dsw-elevation-panel/prominent`（里面那圈 `0 0 0 0.5px` 发丝描边在半透明底上形成灰框+白边），改为纯投影；hover 只加深投影。

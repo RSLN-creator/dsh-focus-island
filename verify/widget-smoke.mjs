@@ -163,10 +163,19 @@ function makeApi(options) {
     ? { cpu: 23, gpu: 61, mem: 47, temp: 64, updatedAt: 1 }
     : opts.resources;
   let task = opts.task === undefined ? null : opts.task;
+  let notifyEnabled = opts.notifyEnabled === undefined ? true : opts.notifyEnabled !== false;
+  let soundEnabled = opts.soundEnabled === undefined ? true : opts.soundEnabled !== false;
+  let notifyPermission = opts.notifyPermission || 'default';
+  const notifyCalls = [];
+  const notifyListeners = new Set();
   const resourceListeners = new Set();
   const taskListeners = new Set();
   let locale = opts.locale || 'zh';
   const localeListeners = new Set();
+
+  function emitNotify() {
+    for (const listener of notifyListeners) listener();
+  }
 
   function emitTask() {
     for (const listener of taskListeners) listener(task);
@@ -200,6 +209,25 @@ function makeApi(options) {
     },
     cancelTask() { taskCalls.push(['cancelTask']); task = null; emitTask(); },
     clearTask() { taskCalls.push(['clearTask']); task = null; emitTask(); },
+    getNotifyEnabled: () => notifyEnabled,
+    setNotifyEnabled(enabled) {
+      notifyCalls.push(['setNotifyEnabled', enabled !== false]);
+      notifyEnabled = enabled !== false;
+      emitNotify();
+    },
+    getSoundEnabled: () => soundEnabled,
+    setSoundEnabled(enabled) {
+      notifyCalls.push(['setSoundEnabled', enabled !== false]);
+      soundEnabled = enabled !== false;
+      emitNotify();
+    },
+    getNotifyPermission: () => notifyPermission,
+    requestNotifyPermission: () => Promise.resolve(notifyPermission),
+    testNotify() { notifyCalls.push(['testNotify']); },
+    testSound() { notifyCalls.push(['testSound']); },
+    subscribeNotifyPrefs(listener) { notifyListeners.add(listener); return () => notifyListeners.delete(listener); },
+    notifyCalls,
+    setNotifyPermission(next) { notifyPermission = next; emitNotify(); },
     persisted,
     taskCalls,
     setSample(next) {
@@ -393,7 +421,8 @@ const REQUIRED = [
   'skip.title', 'skip.body', 'skip.cancel', 'skip.confirm', 'finished.title', 'finished.body',
   'settings.duration', 'settings.durationHint', 'settings.resources', 'settings.opacity',
   'settings.opacityHint', 'settings.interval', 'settings.box.duration', 'settings.box.task',
-  'settings.box.appearance', 'settings.collapsedSize', 'settings.size.compact',
+  'settings.box.appearance', 'settings.box.notify', 'settings.notify', 'settings.notifyHint',
+  'settings.sound', 'action.test', 'settings.collapsedSize', 'settings.size.compact',
   'settings.size.normal', 'settings.size.large', 'settings.language',
   'resources.title', 'resources.cpu', 'resources.gpu', 'resources.mem', 'resources.temp',
   'resources.cpuShort', 'resources.gpuShort', 'resources.memShort', 'resources.tempShort',
@@ -419,6 +448,12 @@ eq(COPY.zh['task.clear'], '知道了（清除）', 'task clear copy');
 eq(COPY.zh['focus.passive'], '被动停留', 'passive column label');
 eq(COPY.zh['settings.box.task'], '自定义任务', 'task settings box title');
 eq(COPY.zh['settings.box.appearance'], '外观与其他', 'appearance box title');
+eq(COPY.zh['settings.box.notify'], '通知', 'notification box title');
+eq(COPY.zh['settings.notify'], '桌面通知', 'desktop notification label');
+eq(COPY.zh['settings.notifyHint'], '需要允许系统通知', 'permission hint copy');
+eq(COPY.zh['settings.sound'], '提示音', 'sound label');
+eq(COPY.zh['action.test'], '测试', 'test button copy');
+eq(COPY.en['action.test'], 'Test', 'test button copy (en)');
 eq(COPY.zh['settings.size.normal'], '标准', 'collapsed size option');
 ok(COPY.zh['finished.title'].includes('{n}'), 'finished.title template var');
 ok(COPY.zh['task.doneBody'].includes('{name}'), 'task.doneBody template var');
@@ -462,6 +497,16 @@ ok(/\.dfi-settings \{[\s\S]*margin: 12px 16px 0/.test(css), 'settings uses the c
 ok(/\.dfi-setBox \{[\s\S]*border: 0\.5px solid var\(--dsw-alias-border-l2\);[\s\S]*background: var\(--dsw-alias-bg-layer-2\)/.test(css), 'settings boxes have a 0.5px border and raised fill');
 ok(/\.dfi-setBoxTitle \{[\s\S]*border-bottom: 0\.5px solid var\(--dsw-alias-border-l2\)/.test(css), 'settings box title divider');
 ok(/\.dfi-setRow \{[\s\S]*min-height: 36px/.test(css), 'settings rows are 36px');
+ok(!/--dsw-elevation-panel|--dsw-elevation-prominent|--dsw-elevation-stroke-color/.test(css), 'card shadow no longer uses the elevation hairline tokens');
+ok(/\.dfi-card \{[\s\S]*box-shadow: 0 3px 8px rgba\(0, 0, 0, 0\.04\), 0 0 16px rgba\(0, 0, 0, 0\.03\);/.test(css), 'light card paints a pure projection');
+ok(/\[data-ds-dark-theme\] \.dfi-card \{[\s\S]*0 4px 14px rgba\(0, 0, 0, 0\.28\)/.test(css), 'dark card paints a deeper pure projection');
+ok(!/\.dfi-card:hover \{[\s\S]{0,120}var\(--dsw-elevation/.test(css), 'hover does not restore the hairline ring');
+ok(/\.dfi-permHint \{[\s\S]*var\(--dsw-alias-label-caption\)/.test(css), 'permission hint is small grey text');
+ok(/\.dfi-btnTest \{[\s\S]*font-size: 13px/.test(css), 'test button is 13px');
+ok(/\.dfi-root button:focus-visible,[\s\S]*outline-offset: -2px/.test(css), 'keyboard focus ring stays inset');
+ok(!/\.dfi-root \{[^}]*border:/.test(css), 'outer root paints no frame');
+ok(!/\.dfi-content \{[^}]*border:/.test(css), 'content wrapper paints no frame');
+ok(/\.dfi-pill \{[^}]*border: 0;/.test(css), 'capsule explicitly paints no border');
 ok(/\.dfi-bar\.dfi-barCol \{ margin-top: 8px; height: 3px; \}/.test(css), 'column bars are 3px');
 ok(/\.dfi-clockBig \{[\s\S]*font-size: 38px/.test(css), 'single countdown stays 38px');
 ok(/\.dfi-cols \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[\s\S]*gap: 12px/.test(css), 'task mode uses a two-column countdown grid');
@@ -548,11 +593,11 @@ same(byClass(expanded.tree, 'dfi-gauge').map((node) => node.props['data-level'])
 expandedApi.setSample({ cpu: 23, gpu: 61, mem: 47, temp: 64, updatedAt: 4 });
 expanded.flush();
 
-// settings: three boxes below the resource section
+// settings: four boxes below the resource section
 expanded.click('设置');
 eq(byClass(expanded.tree, 'dfi-settings').length, 1, 'settings panel opens in-card');
-eq(byClass(expanded.tree, 'dfi-setBox').length, 3, 'three settings boxes');
-same(byClass(expanded.tree, 'dfi-setBoxTitle').map((node) => textOf(node)), ['提醒间隔', '自定义任务', '外观与其他'], 'settings box titles');
+eq(byClass(expanded.tree, 'dfi-setBox').length, 4, 'four settings boxes');
+same(byClass(expanded.tree, 'dfi-setBoxTitle').map((node) => textOf(node)), ['提醒间隔', '自定义任务', '外观与其他', '通知'], 'settings box titles');
 ok(classIndex(expanded.tree, 'dfi-res') < classIndex(expanded.tree, 'dfi-settings'), 'resource section stays above the settings panel');
 const slider = collect(expanded.tree, (node) => node.type === 'input' && node.props.type === 'range')[0];
 eq(slider.props.min, 60, 'opacity range min');
@@ -561,8 +606,32 @@ eq(slider.props.value, 88, 'opacity default 88');
 eq(textOf(byClass(expanded.tree, 'dfi-opacityVal')[0]), '88%', 'opacity value');
 eq(byClass(expanded.tree, 'dfi-chip').length, 5, 'five duration presets');
 eq(byClass(expanded.tree, 'dfi-chip').map((node) => textOf(node)).join(','), '10,25,45,90,180', 'preset values');
-const switchNode = collect(expanded.tree, (node) => node.type === 'button' && node.props.role === 'switch')[0];
-ok(switchNode && switchNode.props['aria-checked'] === true, 'iOS-style resource switch');
+eq(byClass(expanded.tree, 'dfi-switch').length, 3, 'resource + notification + sound switches');
+same(byClass(expanded.tree, 'dfi-switch').map((node) => node.props['aria-label']), ['显示资源占用', '桌面通知', '提示音'], 'switch labels');
+ok(byClass(expanded.tree, 'dfi-switch').every((node) => node.props['aria-checked'] === true), 'all three switches default on');
+eq(byClass(expanded.tree, 'dfi-permHint').length, 1, 'permission hint shown while not granted');
+eq(textOf(byClass(expanded.tree, 'dfi-permHint')[0]), '需要允许系统通知', 'permission hint copy');
+const testButtons = collect(expanded.tree, (node) => node.type === 'button' && textOf(node) === '测试');
+eq(testButtons.length, 2, 'one test button per notification row');
+testButtons[0].props.onClick({});
+expanded.flush();
+ok(expandedApi.notifyCalls.some((entry) => entry[0] === 'testNotify'), 'notification test calls api.testNotify');
+collect(expanded.tree, (node) => node.type === 'button' && textOf(node) === '测试')[1].props.onClick({});
+expanded.flush();
+ok(expandedApi.notifyCalls.some((entry) => entry[0] === 'testSound'), 'sound test calls api.testSound');
+// toggling the two notification switches calls the integration api
+expanded.click('桌面通知');
+ok(expandedApi.notifyCalls.some((entry) => entry[0] === 'setNotifyEnabled' && entry[1] === false), 'notification switch calls api.setNotifyEnabled');
+eq(byClass(expanded.tree, 'dfi-switch')[1].props['aria-checked'], false, 'notification switch follows the disabled state');
+expanded.click('桌面通知');
+eq(byClass(expanded.tree, 'dfi-switch')[1].props['aria-checked'], true, 'notification switch toggles back on');
+expanded.click('提示音');
+ok(expandedApi.notifyCalls.some((entry) => entry[0] === 'setSoundEnabled' && entry[1] === false), 'sound switch calls api.setSoundEnabled');
+expanded.click('提示音');
+// granting permission removes the hint
+expandedApi.setNotifyPermission('granted');
+expanded.flush();
+eq(byClass(expanded.tree, 'dfi-permHint').length, 0, 'permission hint disappears once granted');
 ok(textOf(expanded.tree).includes('到点提醒你'), 'duration hint copy');
 eq(byClass(expanded.tree, 'dfi-seg').length, 2, 'collapsed-size and language segmented controls');
 const segLabels = byClass(expanded.tree, 'dfi-segBtn').map((node) => textOf(node));

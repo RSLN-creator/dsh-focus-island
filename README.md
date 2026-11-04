@@ -27,6 +27,7 @@ bundle，只往官方 `shell.overlay` 座位注册一个浮层。
 | 切窗口即暂停 | 页面隐藏或窗口失焦 → 暂停；这正是插件想鼓励的「去干别的」 |
 | 自定义任务倒计时 | 任务名 + 1–240 分钟；与被动倒计时**并列两栏**显示；到点切蓝色「任务时间到」卡片（再来一次 / 知道了） |
 | 持久化 | 计时进度、偏好、任务都写 `localStorage`，刷新/重开页面继续 |
+| 桌面通知 + 提示音 | 到点/任务到点时发系统通知并响提示音；两者**默认开启**，可在设置里分别关闭 |
 
 ### 形态与外观
 
@@ -91,7 +92,8 @@ node build.mjs --check  # 校验 lib/client.js 是否与源一致
 ```powershell
 node verify/core.test.mjs          # 计时状态机（41 项）
 node verify/monitor.test.mjs       # 资源采样/轮询（17 项）
-node verify/widget-smoke.mjs       # 视觉树 / CSS 令牌 / 布局结构（291 项）
+node verify/widget-smoke.mjs       # 视觉树 / CSS 令牌 / 布局结构（329 项）
+node verify/notify-smoke.mjs       # 通知/提示音开关与触发（默认开、关掉就静默）
 node verify/integration-smoke.mjs  # 伪浏览器 + 伪 Cordis：装配、右栏跟随、topInset、输入暂停、发送重置
 ```
 
@@ -119,6 +121,22 @@ node verify/integration-smoke.mjs  # 伪浏览器 + 伪 Cordis：装配、右栏
 
 ---
 
+## 通知与声音
+
+到点（被动停留用完）和任务倒计时结束时，插件会同时尝试两个通道：
+
+- **桌面通知**：用浏览器 `Notification` API 发一条系统通知（带页面图标，同一类提醒用 tag 合并，不会叠一屏）；
+  首次开启时向系统申请通知权限，设置里的开关行会在未授权时提示「需要允许系统通知」。
+- **提示音**：Web Audio 现场合成的两段短音（到点用上行「叮咚」，任务到点用短促提醒音），**不打包音频文件**；
+  播放结束会挂起 AudioContext，不会让音频设备一直占着。
+
+两个开关在 **设置 → 通知**里，**默认都开启**，可以只留一个；每行下面有「测试」按钮，可以当场试。
+桌面端（Electron）里系统通知本身静音，声音由插件自己的提示音负责。
+
+> 通知/声音的封装与音型参考了 [`@dingyi222666/dsh-session-notification`](https://github.com/dingyi222666/dsh-session-notification)
+> （BSD-3-Clause）：同一套受控的 `Notification` 包装与 Web Audio 播放器，裁到本插件需要的两类提醒。
+
+---
 ## 资源与隐私
 
 - 只在浏览器 `localStorage` 里存三类数据：`dsh-focus-island:v1:prefs`（间隔/外观/语言/任务）、

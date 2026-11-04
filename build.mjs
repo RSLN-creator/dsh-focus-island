@@ -16,7 +16,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 
 const BASE = new URL('./', import.meta.url)
-const PARTS = ['core.js', 'widget.js', 'monitor-client.js', 'client-main.js']
+const PARTS = ['core.js', 'notify.js', 'widget.js', 'monitor-client.js', 'client-main.js']
 const TARGET = new URL('lib/client.js', BASE)
 
 /** Remove ESM export syntax so the file can be concatenated into a function body. */
