@@ -70,3 +70,9 @@ Host 半（资源路由）验证：bundle 关/开一次后，
 - 通知 + 提示音：`lib/notify.js`（受控 `Notification` 包装 + Web Audio 合成音型，参考 `@dingyi222666/dsh-session-notification`，BSD-3-Clause）；
   在「被动到点」「任务到点」两个状态边沿各触发一次，两个开关默认开启，设置 → 通知里可分别关闭并各自带「测试」按钮。
 - 收缩态缝隙：去掉 `.dfi-card` 上的 `--dsw-elevation-panel/prominent`（里面那圈 `0 0 0 0.5px` 发丝描边在半透明底上形成灰框+白边），改为纯投影；hover 只加深投影。
+## 7. 第五轮改动摘要
+
+- 设置里「测试」按钮移到开关左侧同一行；设置区控件字号/高度整体收紧（chips 11.5px/24px、输入 12.5px/28px、分段按钮 11.5px/24px、行高 34px、框内边距 0 10px）。
+- 按下胶囊时左右露白：移除 `.dfi-pill:active` 的 `transform: scale(.985)`（按压只换背景），内容交叉淡入也不再缩放。
+- 不透明度 100% 仍透：底色从半透明的 `--dsw-specific-menu`（alpha 0.5–0.58）改为不透明的 `--dsw-alias-bg-overlay` + `color-mix` 百分比，100% 完全不透明。
+- 验证：widget-smoke 352 项、core 41、monitor 17、integration、notify-smoke 全绿。

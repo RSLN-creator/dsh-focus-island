@@ -478,7 +478,11 @@ ok(!/#[0-9a-fA-F]{3,8}\b/.test(css), 'no hardcoded hex colors');
 ok(!/1px solid var\(--dsw-alias-border/.test(css), 'neutral borders are hairlines');
 ok(/var\(--dsw-alias-/.test(css), 'uses theme aliases');
 ok(/stroke-dashoffset/.test(css), 'progress ring drifts via stroke-dashoffset');
-ok(/color-mix\(in srgb, var\(--dsw-specific-menu/.test(css), 'card alpha is configurable over the menu token');
+ok(/background: color-mix\(in srgb, var\(--dsw-alias-bg-overlay\) var\(--dfi-bg, 88%\), transparent\)/.test(css), 'card alpha mixes the opaque overlay surface');
+ok(!/specific-menu/.test(css), 'card no longer uses the translucent menu token');
+ok(/\.dfi-pill:active \{ background: var\(--dsw-alias-interactive-bg-active\); \}/.test(css), 'pill press changes background only');
+ok(!/\.dfi-pill:active[^}]*transform/.test(css), 'pill press never scales the full capsule');
+ok(!/@keyframes dfi-softin \{ from \{ opacity: 0; transform: scale/.test(css), 'content cross-fade does not scale the card face');
 ok(/backdrop-filter: var\(--dsw-menu-backdrop-filter, blur\(20px\) saturate\(1\.2\)\)/.test(css), 'backdrop blur');
 ok(/\.dfi-gauge\[data-level='warn'\], \.dfi-micro\[data-level='warn'\] \{ --dfi-level-color: var\(--dsw-alias-state-warn-primary\); \}/.test(css), 'amber threshold token');
 ok(/\.dfi-gauge\[data-level='hot'\], \.dfi-micro\[data-level='hot'\] \{ --dfi-level-color: var\(--dsw-alias-state-error-primary\); \}/.test(css), 'red threshold token');
@@ -496,13 +500,27 @@ ok(/\.dfi-root\[data-dragging='true'\] \{ transition: none; \}/.test(css), 'drag
 ok(/\.dfi-settings \{[\s\S]*margin: 12px 16px 0/.test(css), 'settings uses the card 16px side padding');
 ok(/\.dfi-setBox \{[\s\S]*border: 0\.5px solid var\(--dsw-alias-border-l2\);[\s\S]*background: var\(--dsw-alias-bg-layer-2\)/.test(css), 'settings boxes have a 0.5px border and raised fill');
 ok(/\.dfi-setBoxTitle \{[\s\S]*border-bottom: 0\.5px solid var\(--dsw-alias-border-l2\)/.test(css), 'settings box title divider');
-ok(/\.dfi-setRow \{[\s\S]*min-height: 36px/.test(css), 'settings rows are 36px');
+ok(/\.dfi-setRow \{[\s\S]*min-height: 34px/.test(css), 'settings rows are 34px');
+ok(/\.dfi-settings \{[\s\S]*gap: 8px/.test(css), 'settings boxes are 8px apart');
+ok(/\.dfi-setBoxTitle \{[\s\S]*padding: 8px 10px 6px;[\s\S]*font-size: 11px;[\s\S]*font-weight: 500/.test(css), 'box titles are compact 11px/500');
+ok(/\.dfi-setRow \{[\s\S]*padding: 0 10px/.test(css), 'settings rows use 10px inset padding');
+ok(/\.dfi-chipsRow \{[\s\S]*gap: 6px;[\s\S]*padding: 0 10px 8px/.test(css), 'preset chips sit 6px apart');
+ok(/\.dfi-chip \{[\s\S]*padding: 0 8px;[\s\S]*border-radius: 7px;[\s\S]*font-size: 11\.5px/.test(css), 'preset chips are 11.5px / 24px / 7px');
+ok(/\.dfi-chip\[data-active='true'\] \{[\s\S]*inset 0 0 0 1px var\(--dsw-alias-button-ghost-active-border\)/.test(css), 'active chip has a 1px border');
+ok(/\.dfi-taskInput \{[\s\S]*padding: 0 8px;[\s\S]*border-radius: 7px;[\s\S]*font-size: 12\.5px/.test(css), 'task input is 12.5px / 28px / 7px');
+ok(/\.dfi-taskInput::placeholder \{ color: var\(--dsw-alias-label-secondary\); \}/.test(css), 'task placeholder is secondary at the same size');
+ok(/\.dfi-seg \{[\s\S]*gap: 4px/.test(css), 'segmented control gap is 4px');
+ok(/\.dfi-segBtn \{[\s\S]*height: 24px;[\s\S]*padding: 0 8px;[\s\S]*font-size: 11\.5px/.test(css), 'segment buttons are 11.5px / 24px');
+ok(/\.dfi-btnTest \{[\s\S]*height: 22px;[\s\S]*padding: 0 8px;[\s\S]*font-size: 11\.5px/.test(css), 'test button is 11.5px / 22px');
+ok(/\.dfi-stepper \{[\s\S]*height: 26px/.test(css) && /\.dfi-stepBtn \{[\s\S]*width: 22px;[\s\S]*height: 22px/.test(css), 'stepper buttons are 22x22');
+ok(/\.dfi-stepValue \{[\s\S]*font-size: 12\.5px/.test(css), 'stepper value is 12.5px');
+ok(/\.dfi-opacityVal \{[\s\S]*font-size: 11\.5px/.test(css), 'opacity value is 11.5px');
+ok(/\.dfi-rowRight \{[\s\S]*align-items: center;[\s\S]*gap: 8px/.test(css), 'switch rows group test + switch with an 8px gap');
 ok(!/--dsw-elevation-panel|--dsw-elevation-prominent|--dsw-elevation-stroke-color/.test(css), 'card shadow no longer uses the elevation hairline tokens');
 ok(/\.dfi-card \{[\s\S]*box-shadow: 0 3px 8px rgba\(0, 0, 0, 0\.04\), 0 0 16px rgba\(0, 0, 0, 0\.03\);/.test(css), 'light card paints a pure projection');
 ok(/\[data-ds-dark-theme\] \.dfi-card \{[\s\S]*0 4px 14px rgba\(0, 0, 0, 0\.28\)/.test(css), 'dark card paints a deeper pure projection');
 ok(!/\.dfi-card:hover \{[\s\S]{0,120}var\(--dsw-elevation/.test(css), 'hover does not restore the hairline ring');
 ok(/\.dfi-permHint \{[\s\S]*var\(--dsw-alias-label-caption\)/.test(css), 'permission hint is small grey text');
-ok(/\.dfi-btnTest \{[\s\S]*font-size: 13px/.test(css), 'test button is 13px');
 ok(/\.dfi-root button:focus-visible,[\s\S]*outline-offset: -2px/.test(css), 'keyboard focus ring stays inset');
 ok(!/\.dfi-root \{[^}]*border:/.test(css), 'outer root paints no frame');
 ok(!/\.dfi-content \{[^}]*border:/.test(css), 'content wrapper paints no frame');
@@ -613,6 +631,21 @@ eq(byClass(expanded.tree, 'dfi-permHint').length, 1, 'permission hint shown whil
 eq(textOf(byClass(expanded.tree, 'dfi-permHint')[0]), '需要允许系统通知', 'permission hint copy');
 const testButtons = collect(expanded.tree, (node) => node.type === 'button' && textOf(node) === '测试');
 eq(testButtons.length, 2, 'one test button per notification row');
+// test button + switch live in the same row, test on the left
+const rowRights = byClass(expanded.tree, 'dfi-rowRight');
+eq(rowRights.length, 2, 'test button and switch share each notification row');
+rowRights.forEach(function (row) {
+  const nodes = flat(row);
+  const testIndex = nodes.findIndex((node) => node.type === 'button' && textOf(node) === '测试');
+  const switchIndex = nodes.findIndex((node) => node.type === 'button' && node.props.role === 'switch');
+  ok(testIndex >= 0 && switchIndex > testIndex, 'test button sits left of the switch with an 8px gap');
+});
+['桌面通知', '提示音'].forEach(function (label) {
+  const row = collect(expanded.tree, (node) => typeof node.props.className === 'string'
+    && node.props.className.split(/\s+/).includes('dfi-setRow')
+    && textOf(node).includes(label))[0];
+  ok(row && byClass(row, 'dfi-rowRight').length === 1, label + ' row keeps test and switch inline');
+});
 testButtons[0].props.onClick({});
 expanded.flush();
 ok(expandedApi.notifyCalls.some((entry) => entry[0] === 'testNotify'), 'notification test calls api.testNotify');
