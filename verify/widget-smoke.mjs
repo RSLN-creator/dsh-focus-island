@@ -86,6 +86,12 @@ function buttonByText(tree, label) {
   return collect(tree, (node) => node.type === 'button' && textOf(node) === label)[0] || null;
 }
 
+function autoRepeatRow(tree) {
+  return collect(tree, (node) => typeof node.props.className === 'string'
+    && node.props.className.split(/\s+/).includes('dfi-setRow')
+    && textOf(node).includes('自动再来'))[0] || null;
+}
+
 /* ------------------------------------------------------------ fake core/api -- */
 
 const BASE_STATE = {
@@ -166,6 +172,8 @@ function makeApi(options) {
   let notifyEnabled = opts.notifyEnabled === undefined ? true : opts.notifyEnabled !== false;
   let soundEnabled = opts.soundEnabled === undefined ? true : opts.soundEnabled !== false;
   let notifyPermission = opts.notifyPermission || 'default';
+  let autoRepeat = opts.autoRepeat === undefined ? 2 : Math.min(60, Math.max(1, Math.round(Number(opts.autoRepeat) || 2)));
+  const autoRepeatCalls = [];
   const notifyCalls = [];
   const notifyListeners = new Set();
   const resourceListeners = new Set();
@@ -227,6 +235,12 @@ function makeApi(options) {
     testSound() { notifyCalls.push(['testSound']); },
     subscribeNotifyPrefs(listener) { notifyListeners.add(listener); return () => notifyListeners.delete(listener); },
     notifyCalls,
+    getAutoRepeatMinutes: () => autoRepeat,
+    setAutoRepeatMinutes(minutes) {
+      autoRepeatCalls.push(['setAutoRepeatMinutes', minutes]);
+      autoRepeat = Math.min(60, Math.max(1, Math.round(Number(minutes) || 2)));
+    },
+    autoRepeatCalls,
     setNotifyPermission(next) { notifyPermission = next; emitNotify(); },
     persisted,
     taskCalls,
@@ -420,7 +434,8 @@ const REQUIRED = [
   'title', 'action.collapse', 'action.expand', 'action.skip', 'action.settings', 'action.restart',
   'skip.title', 'skip.body', 'skip.cancel', 'skip.confirm', 'finished.title', 'finished.body',
   'settings.duration', 'settings.durationHint', 'settings.resources', 'settings.opacity',
-  'settings.opacityHint', 'settings.interval', 'settings.box.duration', 'settings.box.task',
+  'settings.opacityHint', 'settings.interval', 'settings.autoRepeat', 'settings.autoRepeatHint',
+  'settings.box.duration', 'settings.box.task',
   'settings.box.appearance', 'settings.box.notify', 'settings.notify', 'settings.notifyHint',
   'settings.sound', 'action.test', 'settings.collapsedSize', 'settings.size.compact',
   'settings.size.normal', 'settings.size.large', 'settings.language',
@@ -437,6 +452,10 @@ REQUIRED.forEach((key) => {
 eq(COPY.zh.title, '惜时岛', 'zh title');
 eq(COPY.en.title, 'Focus Island', 'en title');
 eq(COPY.zh['settings.duration'], '提醒间隔', 'duration label');
+eq(COPY.zh['settings.autoRepeat'], '自动再来', 'auto-repeat label');
+ok(COPY.zh['settings.autoRepeatHint'].includes('{n}'), 'auto-repeat hint has the minute template');
+ok(COPY.zh['settings.autoRepeatHint'].includes('自动再计时一轮'), 'auto-repeat hint copy');
+eq(COPY.en['settings.autoRepeat'], 'Auto-repeat', 'auto-repeat label (en)');
 eq(COPY.zh['resources.temp'], 'GPU 温度', 'temperature is GPU temperature (zh)');
 eq(COPY.en['resources.temp'], 'GPU TEMP', 'temperature is GPU temperature (en)');
 eq(COPY.zh['resources.tempShort'], 'GPU℃', 'collapsed temperature label');
@@ -521,6 +540,7 @@ ok(/\.dfi-card \{[\s\S]*box-shadow: 0 3px 8px rgba\(0, 0, 0, 0\.04\), 0 0 16px r
 ok(/\[data-ds-dark-theme\] \.dfi-card \{[\s\S]*0 4px 14px rgba\(0, 0, 0, 0\.28\)/.test(css), 'dark card paints a deeper pure projection');
 ok(!/\.dfi-card:hover \{[\s\S]{0,120}var\(--dsw-elevation/.test(css), 'hover does not restore the hairline ring');
 ok(/\.dfi-permHint \{[\s\S]*var\(--dsw-alias-label-caption\)/.test(css), 'permission hint is small grey text');
+ok(/\.dfi-autoHint \{[\s\S]*font-size: 11\.5px;[\s\S]*color: var\(--dsw-alias-label-secondary\)/.test(css), 'auto-repeat hint is 11.5px secondary');
 ok(/\.dfi-root button:focus-visible,[\s\S]*outline-offset: -2px/.test(css), 'keyboard focus ring stays inset');
 ok(!/\.dfi-root \{[^}]*border:/.test(css), 'outer root paints no frame');
 ok(!/\.dfi-content \{[^}]*border:/.test(css), 'content wrapper paints no frame');
@@ -670,6 +690,52 @@ eq(byClass(expanded.tree, 'dfi-seg').length, 2, 'collapsed-size and language seg
 const segLabels = byClass(expanded.tree, 'dfi-segBtn').map((node) => textOf(node));
 ok(segLabels.includes('紧凑') && segLabels.includes('标准') && segLabels.includes('大'), 'collapsed size options');
 ok(segLabels.includes('中文') && segLabels.includes('English'), 'language options');
+
+// auto-repeat row: default 2, inside the reminder box, writes through the api
+const autoRow = autoRepeatRow(expanded.tree);
+ok(autoRow, 'auto-repeat row present');
+eq(byClass(autoRow, 'dfi-stepBtn').length, 2, 'auto-repeat stepper has minus and plus');
+eq(textOf(byClass(autoRow, 'dfi-stepValue')[0]), '2 分钟', 'auto-repeat defaults to 2 minutes');
+const autoHint = byClass(expanded.tree, 'dfi-autoHint')[0];
+ok(autoHint, 'auto-repeat hint present');
+eq(textOf(autoHint), '到点 2 分钟没处理，就自动再计时一轮', 'auto-repeat hint uses the current value');
+const durationBox = byClass(expanded.tree, 'dfi-setBox')[0];
+const boxNodes = flat(durationBox);
+const idxChips = boxNodes.findIndex((node) => String(node.props.className || '').split(/\s+/).includes('dfi-chipsRow'));
+const idxAuto = boxNodes.indexOf(autoRow);
+const idxAutoHint = boxNodes.indexOf(autoHint);
+const idxDurationHint = boxNodes.findIndex((node) => String(node.props.className || '').split(/\s+/).includes('dfi-setHint'));
+ok(idxChips < idxAuto && idxAuto < idxAutoHint && idxAutoHint < idxDurationHint, 'auto-repeat sits after the presets and before the hint line');
+byClass(autoRepeatRow(expanded.tree), 'dfi-stepBtn')[1].props.onClick({});
+expanded.flush();
+ok(expandedApi.autoRepeatCalls.some((entry) => entry[0] === 'setAutoRepeatMinutes' && entry[1] === 3), 'plus calls api.setAutoRepeatMinutes(3)');
+eq(textOf(byClass(autoRepeatRow(expanded.tree), 'dfi-stepValue')[0]), '3 分钟', 'display follows the new value');
+eq(textOf(byClass(expanded.tree, 'dfi-autoHint')[0]), '到点 3 分钟没处理，就自动再计时一轮', 'hint follows the new value');
+byClass(autoRepeatRow(expanded.tree), 'dfi-stepBtn')[0].props.onClick({});
+expanded.flush();
+ok(expandedApi.autoRepeatCalls.some((entry) => entry[0] === 'setAutoRepeatMinutes' && entry[1] === 2), 'minus calls api.setAutoRepeatMinutes(2)');
+
+// clamp 1..60 and custom initial value
+const lowApi = makeApi({ prefs: { expanded: true }, autoRepeat: 1 });
+const low = mount(lowApi, { rightInset: 0, topInset: 86 });
+low.click('设置');
+eq(textOf(byClass(autoRepeatRow(low.tree), 'dfi-stepValue')[0]), '1 分钟', 'reads the current value from api.getAutoRepeatMinutes()');
+ok(byClass(autoRepeatRow(low.tree), 'dfi-stepBtn')[0].props.disabled === true, 'minus is disabled at 1');
+byClass(autoRepeatRow(low.tree), 'dfi-stepBtn')[0].props.onClick({});
+low.flush();
+ok(lowApi.autoRepeatCalls.every((entry) => entry[0] !== 'setAutoRepeatMinutes' || entry[1] >= 1), 'auto-repeat never drops below 1');
+eq(textOf(byClass(autoRepeatRow(low.tree), 'dfi-stepValue')[0]), '1 分钟', 'clamped at the lower bound');
+low.unmount();
+const highApi = makeApi({ prefs: { expanded: true }, autoRepeat: 60 });
+const high = mount(highApi, { rightInset: 0, topInset: 86 });
+high.click('设置');
+eq(textOf(byClass(autoRepeatRow(high.tree), 'dfi-stepValue')[0]), '60 分钟', 'reads 60 minutes');
+ok(byClass(autoRepeatRow(high.tree), 'dfi-stepBtn')[1].props.disabled === true, 'plus is disabled at 60');
+byClass(autoRepeatRow(high.tree), 'dfi-stepBtn')[1].props.onClick({});
+high.flush();
+ok(highApi.autoRepeatCalls.every((entry) => entry[0] !== 'setAutoRepeatMinutes' || entry[1] <= 60), 'auto-repeat never exceeds 60');
+eq(textOf(byClass(autoRepeatRow(high.tree), 'dfi-stepValue')[0]), '60 分钟', 'clamped at the upper bound');
+high.unmount();
 
 // duration preset applies through the core and persists
 const chips = byClass(expanded.tree, 'dfi-chip');

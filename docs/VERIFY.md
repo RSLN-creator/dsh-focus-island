@@ -76,3 +76,7 @@ Host 半（资源路由）验证：bundle 关/开一次后，
 - 按下胶囊时左右露白：移除 `.dfi-pill:active` 的 `transform: scale(.985)`（按压只换背景），内容交叉淡入也不再缩放。
 - 不透明度 100% 仍透：底色从半透明的 `--dsw-specific-menu`（alpha 0.5–0.58）改为不透明的 `--dsw-alias-bg-overlay` + `color-mix` 百分比，100% 完全不透明。
 - 验证：widget-smoke 352 项、core 41、monitor 17、integration、notify-smoke 全绿。
+## 8. 第六轮改动摘要
+
+- 「自动再来」：被动到点提醒弹出后，若 N 分钟（默认 2，1–60 可调，设置 → 提醒间隔 → 自动再来）内没有任何操作，集成层自动 `core.reset()` 清零再计时一轮，到点再次提醒；提醒期间点击岛上任意按钮视为已处理，本轮不再自动重复。
+- 验证：新增 `verify/auto-repeat-smoke.mjs`（可控时钟：到点 → 1 分钟仍在等待 → 超过 2 分钟自动进入 counting → 下一轮再次 finished → 点击后不再自动重复），widget-smoke 379 项（新设置行/范围/clamp/文案）。
