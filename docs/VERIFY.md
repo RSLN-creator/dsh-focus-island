@@ -80,3 +80,14 @@ Host 半（资源路由）验证：bundle 关/开一次后，
 
 - 「自动再来」：被动到点提醒弹出后，若 N 分钟（默认 2，1–60 可调，设置 → 提醒间隔 → 自动再来）内没有任何操作，集成层自动 `core.reset()` 清零再计时一轮，到点再次提醒；提醒期间点击岛上任意按钮视为已处理，本轮不再自动重复。
 - 验证：新增 `verify/auto-repeat-smoke.mjs`（可控时钟：到点 → 1 分钟仍在等待 → 超过 2 分钟自动进入 counting → 下一轮再次 finished → 点击后不再自动重复），widget-smoke 379 项（新设置行/范围/clamp/文案）。
+
+## 9. 第七轮改动摘要（收缩态去数字）
+
+- 收缩态第二行改为**四条裸彩条**：删掉 `CPU / GPU / MEM / GPU℃` 标签与 `43% / 97%` 数值，只留轨道 + 填充；
+  条高 4px → 5px，左右内边距对齐胶囊首行（左与圆环齐、右给 chevron 让位 40px），底部留白 9px。
+- 读数不丢：条带 `title` 与胶囊 `aria-label` 都带完整「CPU 43% · GPU 97% · 内存 66% · GPU 温度 77°C」；
+  展开卡片里的仪表（带名称 + 数字）不变。
+- 未知值不再印 `--`：收缩态里该段只显示变淡（45% 不透明度）的空轨道，避免看起来像 0%。
+- 文案表去掉不再使用的 `resources.cpuShort / gpuShort / memShort / tempShort` 四个键（zh/en 同步删除）。
+- 验证：`node build.mjs --check` 通过；core 41、monitor 17、widget-smoke **374**、integration、notify、auto-repeat 全绿。
+- 观感：headless Edge 按真实 CSS 渲染三档尺寸（1.0 / 1.2 / 1.4）明暗两主题截图逐张确认——条不裁切、左右与首行对齐、明暗都读得出长度与颜色。

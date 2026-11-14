@@ -440,7 +440,6 @@ const REQUIRED = [
   'settings.sound', 'action.test', 'settings.collapsedSize', 'settings.size.compact',
   'settings.size.normal', 'settings.size.large', 'settings.language',
   'resources.title', 'resources.cpu', 'resources.gpu', 'resources.mem', 'resources.temp',
-  'resources.cpuShort', 'resources.gpuShort', 'resources.memShort', 'resources.tempShort',
   'resources.na', 'task.running', 'task.remaining', 'task.name', 'task.namePlaceholder',
   'task.duration', 'task.start', 'task.stop', 'task.doneTitle', 'task.doneBody',
   'task.again', 'task.clear', 'focus.passive', 'unit.min', 'unit.minutes',
@@ -458,7 +457,6 @@ ok(COPY.zh['settings.autoRepeatHint'].includes('自动再计时一轮'), 'auto-r
 eq(COPY.en['settings.autoRepeat'], 'Auto-repeat', 'auto-repeat label (en)');
 eq(COPY.zh['resources.temp'], 'GPU 温度', 'temperature is GPU temperature (zh)');
 eq(COPY.en['resources.temp'], 'GPU TEMP', 'temperature is GPU temperature (en)');
-eq(COPY.zh['resources.tempShort'], 'GPU℃', 'collapsed temperature label');
 eq(COPY.en['resources.mem'], 'RAM', 'memory label (en)');
 eq(COPY.zh['resources.na'], '--', 'missing placeholder');
 eq(COPY.zh['task.doneTitle'], '任务时间到', 'task done title');
@@ -508,10 +506,12 @@ ok(/\.dfi-gauge\[data-level='hot'\], \.dfi-micro\[data-level='hot'\] \{ --dfi-le
 ok(/text-align: center/.test(css), 'expanded countdown centered');
 ok(/\.dfi-pillRes \{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/.test(css), 'collapsed micro row is a 4-column strip');
 ok(/\.dfi-pillRes \{[\s\S]*var\(--dfi-scale/.test(css), 'micro row scales with collapsedScale');
+ok(!/\.dfi-microLabel|\.dfi-microVal|\.dfi-microTop/.test(css), 'collapsed strip has no label/value text styles');
+ok(/\.dfi-pillRes \{[\s\S]*padding: 0 40px calc\(9px \* var\(--dfi-scale, 1\.2\)\) calc\(7px \* var\(--dfi-scale, 1\.2\)\)/.test(css), 'bars share the top row insets (ring left edge, chevron reserve on the right)');
 ok(/\.dfi-card\[data-mode='collapsed'\] \{[\s\S]*calc\(216px \* var\(--dfi-scale/.test(css), 'capsule width scales with collapsedScale');
 ok(/\.dfi-ringWrap \{[\s\S]*calc\(30px \* var\(--dfi-scale/.test(css), 'ring scales with collapsedScale');
 ok(/\.dfi-clock \{[\s\S]*calc\(15px \* var\(--dfi-scale/.test(css), 'capsule clock font scales with collapsedScale');
-ok(/\.dfi-microTrack \{[\s\S]*calc\(4px \* var\(--dfi-scale/.test(css), 'micro bar height scales with collapsedScale');
+ok(/\.dfi-microTrack \{[\s\S]*calc\(5px \* var\(--dfi-scale/.test(css), 'micro bar height scales with collapsedScale');
 ok(/\.dfi-chevronBox \{[\s\S]*position: absolute;[\s\S]*top: 0;[\s\S]*right: 0;[\s\S]*width: 34px;[\s\S]*height: 34px;/.test(css), 'collapsed chevron is an absolute 34x34 corner hit area');
 ok(/\.dfi-collapse \{[\s\S]*position: absolute;[\s\S]*top: 0;[\s\S]*right: 0;[\s\S]*width: 34px;[\s\S]*height: 34px;/.test(css), 'expanded collapse is the same absolute 34x34 corner');
 ok(/transition: top 140ms[^;]*right 140ms/.test(css), 'top/right use the 140ms transition');
@@ -575,9 +575,12 @@ eq(textOf(wallNode), '09:20', 'collapsed system clock seeded from the clock');
 eq(byClass(collapsed.tree, 'dfi-pillTop').length, 1, 'pill top row');
 eq(byClass(collapsed.tree, 'dfi-pillRes').length, 1, 'pill second row with resources');
 eq(byClass(collapsed.tree, 'dfi-micro').length, 4, 'four micro resource segments');
-same(byClass(collapsed.tree, 'dfi-microLabel').map((node) => textOf(node)), ['CPU', 'GPU', 'MEM', 'GPU℃'], 'micro labels');
-eq(byClass(collapsed.tree, 'dfi-microVal').length, 4, 'micro values');
+eq(byClass(collapsed.tree, 'dfi-microLabel').length, 0, 'no text label in the collapsed strip');
+eq(byClass(collapsed.tree, 'dfi-microVal').length, 0, 'no numeric value in the collapsed strip');
 eq(byClass(collapsed.tree, 'dfi-microFill').length, 4, 'four micro fills');
+const pillStrip = byClass(collapsed.tree, 'dfi-pillRes')[0];
+ok(/^CPU \d+% · GPU \d+% · 内存 \d+% · GPU 温度 \d+°C$/.test(pillStrip.props.title), 'strip keeps a hover summary');
+ok(byClass(collapsed.tree, 'dfi-pill')[0].props['aria-label'].includes('CPU'), 'pill aria-label keeps the reading');
 eq(byClass(collapsed.tree, 'dfi-status').length, 0, 'no status text row');
 eq(byClass(collapsed.tree, 'dfi-underline').length, 0, 'no bottom progress bar');
 eq(intervals.size, 1, 'exactly one local timer while mounted');
