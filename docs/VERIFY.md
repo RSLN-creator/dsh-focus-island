@@ -91,3 +91,12 @@ Host 半（资源路由）验证：bundle 关/开一次后，
 - 文案表去掉不再使用的 `resources.cpuShort / gpuShort / memShort / tempShort` 四个键（zh/en 同步删除）。
 - 验证：`node build.mjs --check` 通过；core 41、monitor 17、widget-smoke **374**、integration、notify、auto-repeat 全绿。
 - 观感：headless Edge 按真实 CSS 渲染三档尺寸（1.0 / 1.2 / 1.4）明暗两主题截图逐张确认——条不裁切、左右与首行对齐、明暗都读得出长度与颜色。
+
+## 10. 第八轮改动摘要（胶囊内边距收进一套网格）
+
+- 问题：圆环只在胶囊顶边下 2px（首行原本是写死 34px 高、30px 圆环在里头居中，那 2px 是居中剩下的余量），而上/左/下别处都已经是 12px，所以「上边距没设好」。
+- 改法：删掉首行的固定 34px 高，首行高度改由内容（圆环）决定、上内边距 12px×scale，左内边距由 7px 收到 12px×scale；`CAPSULE_PAD = 12` 单一常量供首行与彩条共用。
+- 圆环↔彩条间距**保持不变**（7px×scale，实测 1.2 档仍是 8.4px，与上一版逐像素相同）；彩条左右/下方维持 12px（你确认过「刚刚好」的那处）。
+- chevron 命中区不再贴 `top: 0`，改为按 `CAPSULE_PAD + RING_SIZE/2 − HIT/2` 落在圆环轴上（实测 chevron 中心与圆环中心差 0.0px）。
+- 实测（headless Edge 计算值 + 3× 截图，1.2 档）：圆环上 14.4 / 左 14.4、彩条左 14.4 / 右 14.4 / 下 14.4、圆环→彩条 8.4、胶囊高 79.2（上一版 67.2）。
+- 验证：`node build.mjs --check` 通过；core 41、monitor 17、widget-smoke **377**、integration、notify、auto-repeat 全绿；展开卡片未受影响（同参数重渲染比对一致）。
