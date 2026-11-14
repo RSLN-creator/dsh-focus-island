@@ -551,6 +551,39 @@ test('skipCancel drops the confirmation and counting continues', () => {
   assert.equal(noop.phase, PHASE.COUNTING)
 })
 
+/* The reminder view shows the same two-step control. Arming there used to be a
+ * silent no-op (only counting/paused/idle armed), which made the button in the
+ * finished reminder do nothing at all. */
+test('skip arms and confirms from the finished reminder', () => {
+  const h = harness({ durationMinutes: 10 })
+  h.tick()
+  h.advance(10 * MIN + 1000)
+  const finished = h.tick()
+  assert.equal(finished.phase, PHASE.FINISHED)
+
+  const armed = h.core.skipArm()
+  assert.equal(armed.skipArmed, true, 'the reminder can arm a skip')
+  assert.equal(armed.phase, PHASE.FINISHED, 'arming must not leave the reminder')
+
+  const done = h.core.skipConfirm()
+  assert.equal(done.phase, PHASE.SKIPPED, 'confirming from the reminder ends the round')
+  assert.equal(done.skipArmed, false)
+
+  h.advance(30 * MIN)
+  assert.equal(h.tick().phase, PHASE.SKIPPED, 'the ended reminder does not come back by itself')
+})
+
+test('cancelling a skip armed from the reminder returns to the reminder', () => {
+  const h = harness({ durationMinutes: 10 })
+  h.tick()
+  h.advance(10 * MIN + 1000)
+  h.tick()
+  h.core.skipArm()
+  const back = h.core.skipCancel()
+  assert.equal(back.skipArmed, false)
+  assert.equal(back.phase, PHASE.FINISHED, 'cancel restores the reminder, not counting')
+})
+
 // ---------------------------------------------------------------------------
 // Duration changes
 // ---------------------------------------------------------------------------

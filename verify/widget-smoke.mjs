@@ -533,13 +533,13 @@ ok(/\.dfi-settings \{[\s\S]*gap: 8px/.test(css), 'settings boxes are 8px apart')
 ok(/\.dfi-setBoxTitle \{[\s\S]*padding: 8px 10px 6px;[\s\S]*font-size: 11px;[\s\S]*font-weight: 500/.test(css), 'box titles are compact 11px/500');
 ok(/\.dfi-setRow \{[\s\S]*padding: 0 10px/.test(css), 'settings rows use 10px inset padding');
 ok(/\.dfi-chipsRow \{[\s\S]*gap: 6px;[\s\S]*padding: 0 10px 8px/.test(css), 'preset chips sit 6px apart');
-ok(/\.dfi-chip \{[\s\S]*padding: 0 8px;[\s\S]*border-radius: 7px;[\s\S]*font-size: 11\.5px/.test(css), 'preset chips are 11.5px / 24px / 7px');
+ok(/\.dfi-chip \{[\s\S]*padding: 0 8px;[\s\S]*border-radius: 7px;[\s\S]*font-size: 11px/.test(css), 'preset chips are 11px / 24px / 7px');
 ok(/\.dfi-chip\[data-active='true'\] \{[\s\S]*inset 0 0 0 1px var\(--dsw-alias-button-ghost-active-border\)/.test(css), 'active chip has a 1px border');
-ok(/\.dfi-taskInput \{[\s\S]*padding: 0 8px;[\s\S]*border-radius: 7px;[\s\S]*font-size: 12\.5px/.test(css), 'task input is 12.5px / 28px / 7px');
+ok(/\.dfi-taskInput \{[\s\S]*padding: 0 8px;[\s\S]*border-radius: 7px;[\s\S]*font-size: 11px/.test(css), 'task input is 11px / 28px / 7px');
 ok(/\.dfi-taskInput::placeholder \{ color: var\(--dsw-alias-label-secondary\); \}/.test(css), 'task placeholder is secondary at the same size');
 ok(/\.dfi-seg \{[\s\S]*gap: 4px/.test(css), 'segmented control gap is 4px');
-ok(/\.dfi-segBtn \{[\s\S]*height: 24px;[\s\S]*padding: 0 8px;[\s\S]*font-size: 11\.5px/.test(css), 'segment buttons are 11.5px / 24px');
-ok(/\.dfi-btnTest \{[\s\S]*height: 22px;[\s\S]*padding: 0 8px;[\s\S]*font-size: 11\.5px/.test(css), 'test button is 11.5px / 22px');
+ok(/\.dfi-segBtn \{[\s\S]*height: 24px;[\s\S]*padding: 0 8px;[\s\S]*font-size: 11px/.test(css), 'segment buttons are 11px / 24px');
+ok(/\.dfi-btnTest \{[\s\S]*height: 22px;[\s\S]*padding: 0 8px;[\s\S]*font-size: 11px/.test(css), 'test button is 11px / 22px');
 ok(/\.dfi-stepper \{[\s\S]*height: 26px/.test(css) && /\.dfi-stepBtn \{[\s\S]*width: 22px;[\s\S]*height: 22px/.test(css), 'stepper buttons are 22x22');
 ok(/\.dfi-stepValue \{[\s\S]*font-size: 12\.5px/.test(css), 'stepper value is 12.5px');
 ok(!/\.dfi-opacityVal \{[\s\S]*font-size/.test(css), 'no opacity slider styles remain');
@@ -549,7 +549,7 @@ ok(/\.dfi-card \{[\s\S]*box-shadow: 0 3px 8px rgba\(0, 0, 0, 0\.04\), 0 0 16px r
 ok(/\[data-ds-dark-theme\] \.dfi-card \{[\s\S]*0 4px 14px rgba\(0, 0, 0, 0\.28\)/.test(css), 'dark card paints a deeper pure projection');
 ok(!/\.dfi-card:hover \{[\s\S]{0,120}var\(--dsw-elevation/.test(css), 'hover does not restore the hairline ring');
 ok(/\.dfi-permHint \{[\s\S]*var\(--dsw-alias-label-caption\)/.test(css), 'permission hint is small grey text');
-ok(/\.dfi-autoHint \{[\s\S]*font-size: 11\.5px;[\s\S]*color: var\(--dsw-alias-label-secondary\)/.test(css), 'auto-repeat hint is 11.5px secondary');
+ok(/\.dfi-autoHint \{[\s\S]*font-size: 11px;[\s\S]*color: var\(--dsw-alias-label-secondary\)/.test(css), 'auto-repeat hint is 11px secondary');
 ok(/\.dfi-root button:focus-visible,[\s\S]*outline-offset: -2px/.test(css), 'keyboard focus ring stays inset');
 ok(!/\.dfi-root \{[^}]*border:/.test(css), 'outer root paints no frame');
 ok(!/\.dfi-content \{[^}]*border:/.test(css), 'content wrapper paints no frame');
@@ -559,6 +559,33 @@ ok(/\.dfi-clockBig \{[\s\S]*font-size: 38px/.test(css), 'single countdown stays 
 ok(/\.dfi-cols \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[\s\S]*gap: 12px/.test(css), 'task mode uses a two-column countdown grid');
 ok(/\.dfi-colClock \{[\s\S]*font-size: 27px/.test(css), 'column countdowns are 27px');
 ok(/\.dfi-barFillTask \{ background: var\(--dsw-alias-state-business-primary\); \}/.test(css), 'task progress uses the brand blue');
+
+/* Every view shares one header geometry. The reminder views used to put 16px
+ * of horizontal padding on their wrapper while the header also insets itself,
+ * so the title sat 32px in and jumped left when the reminder appeared. */
+ok(/\.dfi-finish \{ padding: 0 0 16px; \}/.test(css), 'finished wrapper adds no horizontal padding');
+ok(/\.dfi-confirm \{ padding: 0 0 16px; \}/.test(css), 'confirm wrapper adds no horizontal padding');
+ok(/\.dfi-taskDone \{ padding: 0 0 16px; \}/.test(css), 'task-done wrapper adds no horizontal padding');
+ok(/\.dfi-btnRow \{[\s\S]*margin: 14px 16px 0;/.test(css), 'reminder action rows sit on the same 16px inset');
+ok(/\.dfi-expHdr \{[\s\S]*padding: 0 42px 0 16px;/.test(css), 'one header inset for every view');
+
+/* One type scale: five steps, and the small controls sit on the lowest one. */
+const declared = [];
+for (const block of css.split('}')) {
+  const sel = /\.dfi-([A-Za-z]+)\s*\{/.exec(block);
+  const size = /font-size: ([\d.]+)px/.exec(block);
+  if (sel && size) declared.push([sel[1], Number(size[1])]);
+}
+ok(declared.length > 8, 'font sizes were actually collected (' + declared.length + ')');
+const allowed = new Set([11, 12, 12.5, 13, 14, 27, 38]);
+const stray = declared.filter(([, v]) => !allowed.has(v));
+eq(stray.length, 0, 'every font size is on the type scale (11 / 12 / 12.5 / 13 / 14 + clocks): ' + JSON.stringify(stray));
+const sizeOf = (name) => (declared.find(([sel]) => sel === name) || [null, null])[1];
+eq(sizeOf('taskInput'), 11, 'task input is on the smallest step');
+ok(sizeOf('seg') === null || sizeOf('seg') === 11, 'segmented control does not add a size of its own');
+eq(sizeOf('segBtn'), 11, '紧凑/标准/大 and 中文/English sit on the smallest step');
+eq(sizeOf('btnTest'), 11, 'the two 测试 buttons sit on the smallest step');
+eq(sizeOf('chip'), 11, 'preset chips sit on the smallest step');
 ok(/\.dfi-card\[data-view='taskDone'\]::before \{[\s\S]*var\(--dsw-alias-state-business-primary\)/.test(css), 'task-done view has a blue wash');
 ok(/\.dfi-taskDoneTitle \{[\s\S]*var\(--dsw-alias-state-business-primary\)/.test(css), 'task-done title is brand blue');
 styleProbe.unmount();
@@ -880,6 +907,25 @@ ok(byClass(finished.tree, 'dfi-btnPrimary').length === 1, 'finished restart is t
 ok(byClass(finished.tree, 'dfi-liveDot').some((node) => node.props['data-state'] === 'finished'), 'finished dot is red');
 finished.unmount();
 
+/* The reminder's "跳过" used to be a dead button: `skipArm()` only armed while
+ * counting/paused, so the reminder view armed nothing and the confirm screen
+ * never appeared. Clicking it must now reach the core exactly like in normal
+ * view, and the confirm screen must be the reminder-worded one. */
+const skipFromReminderApi = makeApi({ prefs: { expanded: false }, state: { phase: 'finished', watchedMs: 31 * 60000, elapsedMs: 25 * 60000, remainingMs: 0, progress: 1, modelBusy: false } });
+const skipFromReminder = mount(skipFromReminderApi, { rightInset: 0, topInset: 86 });
+const reminderSkip = collect(skipFromReminder.tree, (node) => node.type === 'button' && textOf(node) === '跳过')[0];
+ok(reminderSkip !== undefined, 'the reminder offers a skip button');
+reminderSkip.props.onClick({});
+skipFromReminder.flush();
+ok(skipFromReminderApi.core.calls.some((entry) => entry[0] === 'skipArm'), 'reminder skip arms the confirmation');
+eq(skipFromReminder.root().props['data-view'], 'confirm', 'reminder skip opens the confirmation');
+ok(textOf(skipFromReminder.tree).includes('结束本轮提醒'), 'the confirmation is worded for the reminder, not for a running countdown');
+ok(!textOf(skipFromReminder.tree).includes('跳过本次提醒？'), 'the reminder does not reuse the countdown wording');
+collect(skipFromReminder.tree, (node) => node.type === 'button' && textOf(node) === '取消')[0].props.onClick({});
+skipFromReminder.flush();
+ok(textOf(skipFromReminder.tree).includes('你已在这个没有对话的窗口里停留 31 分钟'), 'cancel returns to the reminder');
+skipFromReminder.unmount();
+
 // hidden fullscreen right sidebar
 const hiddenApi = makeApi({});
 const hidden = mount(hiddenApi, { rightInset: -1, topInset: 86 });
@@ -913,3 +959,4 @@ if (process.exitCode) {
 } else {
   console.log('widget smoke: ' + passed + ' checks passed');
 }
+

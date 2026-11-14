@@ -142,3 +142,35 @@ Host 半（资源路由）验证：bundle 关/开一次后，
 
 - 帧时间**没能实测**：本机 headless Edge 的 CDP 通道在沙箱里一直挂起（`--virtual-time-budget` 又会把渲染开销抹平），所以没有「改前 32 ms / 改后 16 ms」这种读数。上面给的是**可复跑的代码级断言**（脉冲频率、布局读次数、样式禁用），不是帧率数字。
 - 「动画期间自动提升合成层」是浏览器行为，未逐帧取证；若日后发现展开/收起瞬间掉帧，可在过渡开始/结束时手动加/撤 `will-change`。
+
+## 12. 第十轮改动摘要（提醒界面的跳过失效 + 视图规范 + 字阶统一）
+
+用户报了四点，其中第 1 点是**真缺陷**，第 3 点是**规范没落地**，第 2、4 点是观感与字号。
+
+**① 提醒界面的「跳过」是死按钮（真缺陷）**
+
+- 根因：`core.skipArm()` 只在 `counting / paused / idle` 时置 arm，`finished` 直接 `return getState()` 什么都不做。提醒卡在 `finished`，所以点「跳过」既不 arm 也不报错——界面毫无反应，只有「重新计时」有用。
+- 改法：`skipArm()` 允许从 `finished` 进入 arm；`skipConfirm()` 从 `finished` 走 `enterSkipped()`，把这一轮钉死为终态（不会被「自动再来」重新拉起来）。`skipCancel()` 回到 `finished`，仍是提醒卡。
+- 文案分离：计时中的跳过问「跳过本次提醒？」，提醒卡上的跳过问「结束本轮提醒？」——同一套两步机制，但用户读得懂自己在结束什么。
+- 新增两个 core 单测（共 **43** 项）。**反向变异**：把 `finished` 那段 arm 删掉 ⇒ `the reminder can arm a skip` 立刻红。
+
+**② 「跳过」图标换成同族描边**
+
+- 旧图标是实心三角形 + 竖条（媒体播放「下一曲」），岛内其余图标都是 1.5px 描边，实心块显得突兀。
+- 新图标为描边 skip-forward，且 `makeIcon` 不再对 skip 单独走 `fill: currentColor`——所有图标统一 `fill: none; stroke: currentColor`。
+
+**③ 视图规范：所有界面共用同一条 header 基线**
+
+- 根因：`finished / confirm / taskDone` 三个包装层各自写了 `padding: 0 16px`，而它们内部的 `.dfi-expHdr` **也**自带 16px 左内边距 ⇒ 提醒界面的「惜时岛」实际缩进 32px，正常界面 16px，切换时标题会横向跳动。
+- 改法：包装层水平内边距归零，正文/副文/按钮行改为各自 `margin: … 16px …`；`.dfi-main` 从 18px 收到 16px，全岛只用一条 16px 竖线。
+- 顺带统一：`dfi-btnPrimary` 由官方 `button-primary-fill`（深色下≈纯白实心块）改为 `button-info-fill`（DeepSeek 蓝），与「任务时间到」的蓝色卡同族，两张提醒卡不再一个白一个蓝。
+- 观感核对：五个视图（normal / finished / confirm / taskDone / settings）逐一 2× 截图并排比对，「惜时岛」左缘落在同一竖线、同色、同字号。
+
+**④ 字阶统一（点名 8 处降一档）**
+
+- 原字阶有 10 个值（11 / 11.5 / 12 / 12.5 / 13 / 13.5 / 14 / 27 / 38），收为 **5 档 + 2 个大号**：`FS_XS 11 / FS_SM 12 / FS_MD 12.5 / FS_LG 13 / FS_XL 14`，另加两个倒计时 27 / 38。11.5 与 13.5 这两个散值全部吸附到相邻档。
+- 点名的四处（写周报输入、紧凑/标准/大、中文/English、两个「测试」）统一落到 **xs 11**（原先 12.5 / 11.5 / 11.5 / 11.5）。
+- 顺手修掉全盘检查发现的两处：「语言 / Language」这种双写标签换行显示（改为单写「语言」/「Language」，与其他行一致）；`dfi-main` 的 18px 与 16px 基准不符。
+- 断言：widget-smoke **389** 项，新增「每个 font-size 都必须落在字阶上」的遍历断言（把任一 `11px` 改成 `11.5px` ⇒ 立刻报 stray），以及「三个提醒包装层不得有水平 padding」「`.dfi-expHdr` 单一内边距」两条几何断言。
+
+**验证**：core 43、monitor 17、widget-smoke 389、integration、notify、auto-repeat 全绿；`build.mjs --check` 通过。
