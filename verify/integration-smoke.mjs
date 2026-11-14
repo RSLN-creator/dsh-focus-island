@@ -23,8 +23,13 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const captured = {}
 const intervals = []
+const intervalDelays = []
 const listeners = new Map()
 const storage = new Map()
+
+/* Layout-read counters: the whole point of the idle-time fix is that a pulse
+ * with nothing changed must not force style/layout work. */
+const reads = { columnRect: 0, headerRect: 0, querySelector: 0 }
 
 /** Right sidebar column: 420px wide, no fullscreen flag. */
 const frameEl = {
@@ -35,7 +40,10 @@ const columnEl = {
   isConnected: true,
   parentElement: frameEl,
   closest: (selector) => (String(selector).includes('data-rightbar') ? frameEl : null),
-  getBoundingClientRect: () => ({ width: 420, height: 900, top: 0, left: 1080, right: 1500, bottom: 900 }),
+  getBoundingClientRect: () => {
+    reads.columnRect += 1
+    return { width: 420, height: 900, top: 0, left: 1080, right: 1500, bottom: 900 }
+  },
 }
 
 /** Composer card: no running turn (no stop button). */
@@ -46,7 +54,10 @@ const cardEl = {
 /** Official conversation header: 76px tall, so the island must start below it. */
 const headerEl = {
   isConnected: true,
-  getBoundingClientRect: () => ({ width: 1080, height: 76, top: 0, left: 0, right: 1080, bottom: 76 }),
+  getBoundingClientRect: () => {
+    reads.headerRect += 1
+    return { width: 1080, height: 76, top: 0, left: 0, right: 1080, bottom: 76 }
+  },
 }
 const headerLeadingEl = {
   closest: (selector) => (selector === 'header' ? headerEl : null),
@@ -62,7 +73,7 @@ globalThis.window = {
   __ModuleLoader__: { load: (definition) => { captured.load = definition } },
   requestAnimationFrame: (fn) => { fn(); return 1 },
   cancelAnimationFrame: () => {},
-  setInterval: (fn) => { intervals.push(fn); return intervals.length },
+  setInterval: (fn, delay) => { intervals.push(fn); intervalDelays.push(delay); return intervals.length },
   clearInterval: () => {},
   setTimeout: (fn) => { const id = setTimeout(fn, 0); return id },
   clearTimeout: (id) => clearTimeout(id),
@@ -82,6 +93,7 @@ globalThis.document = {
   documentElement: { getAttribute: () => 'zh', addEventListener: () => {} },
   head: { appendChild: () => {} },
   querySelector: (selector) => {
+    reads.querySelector += 1
     if (selector === '[data-composer-input]') return composerEl
     if (selector === '[data-composer-card]') return cardEl
     if (selector === '[data-rightbar-col]') return columnEl
@@ -188,7 +200,24 @@ assert.equal(tree.props.rightInset, 420, 'right sidebar inset must follow the me
 assert.equal(tree.props.topInset, 86, 'top inset must clear the 76px conversation header (+10px gap)')
 
 assert.equal(intervals.length, 2, 'plugin must schedule the 1 s tick and the 5 s persistence pulse')
+assert.deepEqual(intervalDelays, [1000, 5000], 'pulses run at 1 s / 5 s — the 1 s display resolution')
 const [tick, save] = intervals
+
+/* An idle pulse must cost no layout read at all: the tracked header/column are
+ * still connected, so nothing can have moved and nothing is measured. */
+reads.columnRect = 0
+reads.headerRect = 0
+tick()
+assert.equal(reads.columnRect, 0, 'an idle pulse must not read the column rect')
+assert.equal(reads.headerRect, 0, 'an idle pulse must not read the header rect')
+
+/* A session switch detaches the old header; that is the only case that has to
+ * re-measure, and `isConnected` is what detects it. */
+const detached = headerEl.isConnected
+headerEl.isConnected = false
+tick()
+headerEl.isConnected = detached
+assert.ok(reads.headerRect > 0, 'a replaced header must trigger a fresh measurement')
 
 /** Read back the persisted focus snapshot. */
 function storedState() {

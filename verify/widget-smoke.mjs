@@ -433,8 +433,8 @@ same(Object.keys(COPY.zh).sort(), Object.keys(COPY.en).sort(), 'zh/en copy key p
 const REQUIRED = [
   'title', 'action.collapse', 'action.expand', 'action.skip', 'action.settings', 'action.restart',
   'skip.title', 'skip.body', 'skip.cancel', 'skip.confirm', 'finished.title', 'finished.body',
-  'settings.duration', 'settings.durationHint', 'settings.resources', 'settings.opacity',
-  'settings.opacityHint', 'settings.interval', 'settings.autoRepeat', 'settings.autoRepeatHint',
+  'settings.duration', 'settings.durationHint', 'settings.resources',
+  'settings.interval', 'settings.autoRepeat', 'settings.autoRepeatHint',
   'settings.box.duration', 'settings.box.task',
   'settings.box.appearance', 'settings.box.notify', 'settings.notify', 'settings.notifyHint',
   'settings.sound', 'action.test', 'settings.collapsedSize', 'settings.size.compact',
@@ -488,19 +488,25 @@ const styleProbe = mount(makeApi({ prefs: { expanded: false } }));
 const styleNodes = collect(styleProbe.tree, (node) => node.type === 'style');
 eq(styleNodes.length, 1, 'exactly one in-tree <style> element');
 const css = String(styleNodes[0].children[0]);
+/* Rules only: several assertions below are "this must not appear anywhere",
+ * and comment prose legitimately mentions the very words they forbid. */
+const cssRules = css.replace(/\/\*[\s\S]*?\*\//g, ' ');
 eq(styleNodes[0].props.id, STYLE_ID, 'style carries STYLE_ID');
 ok(/prefers-reduced-motion:\s*reduce/.test(css), 'reduced-motion fallback');
 ok(/@keyframes dfi-/.test(css), 'keyframes present');
-ok(!/#[0-9a-fA-F]{3,8}\b/.test(css), 'no hardcoded hex colors');
+ok(!/#[0-9a-fA-F]{3,8}\b/.test(cssRules), 'no hardcoded hex colors');
 ok(!/1px solid var\(--dsw-alias-border/.test(css), 'neutral borders are hairlines');
 ok(/var\(--dsw-alias-/.test(css), 'uses theme aliases');
 ok(/stroke-dashoffset/.test(css), 'progress ring drifts via stroke-dashoffset');
-ok(/background: color-mix\(in srgb, var\(--dsw-alias-bg-overlay\) var\(--dfi-bg, 88%\), transparent\)/.test(css), 'card alpha mixes the opaque overlay surface');
-ok(!/specific-menu/.test(css), 'card no longer uses the translucent menu token');
+ok(/\.dfi-card \{[\s\S]*background: var\(--dsw-alias-bg-layer-1, var\(--dsw-alias-bg-overlay\)\)/.test(css), 'card paints the opaque official surface');
+ok(!/backdrop-filter/.test(cssRules), 'no backdrop-filter: the card never samples what is behind it');
+ok(!/specific-menu/.test(cssRules), 'card does not use the translucent menu token');
 ok(/\.dfi-pill:active \{ background: var\(--dsw-alias-interactive-bg-active\); \}/.test(css), 'pill press changes background only');
 ok(!/\.dfi-pill:active[^}]*transform/.test(css), 'pill press never scales the full capsule');
 ok(!/@keyframes dfi-softin \{ from \{ opacity: 0; transform: scale/.test(css), 'content cross-fade does not scale the card face');
-ok(/backdrop-filter: var\(--dsw-menu-backdrop-filter, blur\(20px\) saturate\(1\.2\)\)/.test(css), 'backdrop blur');
+ok(!/infinite/.test(cssRules), 'no perpetual animation keeps the page out of its idle state');
+ok(!/will-change/.test(cssRules), 'no standing will-change pins the island to a composited layer');
+ok(!/color-mix\(in srgb, var\(--dsw-alias-bg/.test(cssRules), 'card fill is a solid colour, not a mixed alpha');
 ok(/\.dfi-gauge\[data-level='warn'\], \.dfi-micro\[data-level='warn'\] \{ --dfi-level-color: var\(--dsw-alias-state-warn-primary\); \}/.test(css), 'amber threshold token');
 ok(/\.dfi-gauge\[data-level='hot'\], \.dfi-micro\[data-level='hot'\] \{ --dfi-level-color: var\(--dsw-alias-state-error-primary\); \}/.test(css), 'red threshold token');
 ok(/text-align: center/.test(css), 'expanded countdown centered');
@@ -536,7 +542,7 @@ ok(/\.dfi-segBtn \{[\s\S]*height: 24px;[\s\S]*padding: 0 8px;[\s\S]*font-size: 1
 ok(/\.dfi-btnTest \{[\s\S]*height: 22px;[\s\S]*padding: 0 8px;[\s\S]*font-size: 11\.5px/.test(css), 'test button is 11.5px / 22px');
 ok(/\.dfi-stepper \{[\s\S]*height: 26px/.test(css) && /\.dfi-stepBtn \{[\s\S]*width: 22px;[\s\S]*height: 22px/.test(css), 'stepper buttons are 22x22');
 ok(/\.dfi-stepValue \{[\s\S]*font-size: 12\.5px/.test(css), 'stepper value is 12.5px');
-ok(/\.dfi-opacityVal \{[\s\S]*font-size: 11\.5px/.test(css), 'opacity value is 11.5px');
+ok(!/\.dfi-opacityVal \{[\s\S]*font-size/.test(css), 'no opacity slider styles remain');
 ok(/\.dfi-rowRight \{[\s\S]*align-items: center;[\s\S]*gap: 8px/.test(css), 'switch rows group test + switch with an 8px gap');
 ok(!/--dsw-elevation-panel|--dsw-elevation-prominent|--dsw-elevation-stroke-color/.test(css), 'card shadow no longer uses the elevation hairline tokens');
 ok(/\.dfi-card \{[\s\S]*box-shadow: 0 3px 8px rgba\(0, 0, 0, 0\.04\), 0 0 16px rgba\(0, 0, 0, 0\.03\);/.test(css), 'light card paints a pure projection');
@@ -644,10 +650,7 @@ eq(byClass(expanded.tree, 'dfi-setBox').length, 4, 'four settings boxes');
 same(byClass(expanded.tree, 'dfi-setBoxTitle').map((node) => textOf(node)), ['提醒间隔', '自定义任务', '外观与其他', '通知'], 'settings box titles');
 ok(classIndex(expanded.tree, 'dfi-res') < classIndex(expanded.tree, 'dfi-settings'), 'resource section stays above the settings panel');
 const slider = collect(expanded.tree, (node) => node.type === 'input' && node.props.type === 'range')[0];
-eq(slider.props.min, 60, 'opacity range min');
-eq(slider.props.max, 100, 'opacity range max');
-eq(slider.props.value, 88, 'opacity default 88');
-eq(textOf(byClass(expanded.tree, 'dfi-opacityVal')[0]), '88%', 'opacity value');
+eq(slider, undefined, 'no opacity range control any more');
 eq(byClass(expanded.tree, 'dfi-chip').length, 5, 'five duration presets');
 eq(byClass(expanded.tree, 'dfi-chip').map((node) => textOf(node)).join(','), '10,25,45,90,180', 'preset values');
 eq(byClass(expanded.tree, 'dfi-switch').length, 3, 'resource + notification + sound switches');
@@ -750,11 +753,8 @@ expanded.flush();
 ok(expandedApi.persisted.some((entry) => entry[0] === 'durationMinutes' && entry[1] === 45), 'duration persisted');
 ok(expandedApi.core.calls.some((entry) => entry[0] === 'setDurationMinutes' && entry[1] === 45), 'duration applied through core');
 
-// opacity slider applies live
-expanded.setInput('dfi-slider', '70');
-ok(expandedApi.persisted.some((entry) => entry[0] === 'panelOpacity' && entry[1] === 70), 'opacity persisted');
-eq(textOf(byClass(expanded.tree, 'dfi-opacityVal')[0]), '70%', 'opacity readout updates');
-eq(expanded.card().props.style['--dfi-bg'], '70%', 'card alpha follows the setting');
+// the opaque surface is fixed: nothing is persisted for it, nothing can change it
+eq(expanded.card().props.style['--dfi-bg'], undefined, 'card carries no alpha variable');
 
 // collapsedScale segmented control
 expanded.clickText('大');

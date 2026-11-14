@@ -100,3 +100,45 @@ Host 半（资源路由）验证：bundle 关/开一次后，
 - chevron 命中区不再贴 `top: 0`，改为按 `CAPSULE_PAD + RING_SIZE/2 − HIT/2` 落在圆环轴上（实测 chevron 中心与圆环中心差 0.0px）。
 - 实测（headless Edge 计算值 + 3× 截图，1.2 档）：圆环上 14.4 / 左 14.4、彩条左 14.4 / 右 14.4 / 下 14.4、圆环→彩条 8.4、胶囊高 79.2（上一版 67.2）。
 - 验证：`node build.mjs --check` 通过；core 41、monitor 17、widget-smoke **377**、integration、notify、auto-repeat 全绿；展开卡片未受影响（同参数重渲染比对一致）。
+
+## 11. 第九轮改动摘要（渲染卡顿：去玻璃、去常驻动画、降脉冲）
+
+用户反馈「渲染卡顿」，并授权若纯白/纯黑可行就整块去掉透明玻璃、按 DSH 的黑白体系来。
+
+**定位到的三条开销（都读在源码上，不是猜的）：**
+
+| # | 位置 | 开销 |
+|---|---|---|
+| 1 | `.dfi-card` 的 `backdrop-filter: blur(20px) saturate(1.2)` | 岛浮在会滚动的对话之上，模糊必须**每帧重读并重算身后内容**——对话一滚动就是每帧一次全区域模糊 |
+| 2 | `.dfi-ringWrap::after` / `.dfi-ringArc` / `.dfi-liveDot::after` 三处 `animation: … infinite` | 页面**永远进不了空闲态**，第 1 条的每帧代价变成常驻；即使计时暂停也在跑 |
+| 3 | 根与卡片的常驻 `will-change: top, right, opacity` / `width, height` | 整只浮层被永久钉在独立合成层，白占显存与重绘调度，而它只在拖动右栏的瞬间才动 |
+
+**附带找到的两处每脉冲开销：**
+
+| # | 位置 | 开销 |
+|---|---|---|
+| 4 | `window.setInterval(…, 250)` 的 tick | `core.publish` 把订阅合并到**整秒**、界面也显示整秒，250 ms 等于每个可见变化跑四次；每次还带 `getState()`、composer 文本读、composer 按钮全扫、两次 `getBoundingClientRect`（强制样式/布局刷新） |
+| 5 | `layout.refresh()` 每脉冲无条件重测 | 同上，强制布局读；真正需要的只是「会话切换后 header 被换掉」这一种情况 |
+
+**改法：**
+
+- 底色改为**不透明官方表面** `--dsw-alias-bg-layer-1`（浅色 `#fff`、深色 `#232324`，取自 UI-theme 包的 `--dsw-static-neutral-bluish-00 / 875`）；删掉 `backdrop-filter`、`color-mix` 透明度混合与整套不透明度设置（滑杆、`OPACITY_*`、`clampOpacity`、`dfi-slider` 样式、`settings.opacity*` 文案 zh/en）。
+- 删掉三处 `infinite` 动画与对应 `@keyframes`（`dfi-breathe` / `dfi-ringPulse` / `dfi-halo`），状态改由**颜色与弧长**表达；`prefers-reduced-motion` 块同步删掉失效选择器。
+- 删掉两处常驻 `will-change`（宽度/高度与 top/right 的过渡仍是短动画，动画期间浏览器自己会提升）。
+- tick 250 ms → **1000 ms**；`layout.refresh` 改为 `refreshIfStale()`：只读 `isConnected`（零布局成本），节点真被换掉时才 `requestAnimationFrame` 里重测；新增 `layout.remeasure()` 留给确实需要强测的路径。
+- composer 节点加了带 `isConnected` 失效检查的缓存，`sync()` 不再每脉冲两次全树 `querySelector`。
+
+**验证（可复跑）：**
+
+- `verify/integration-smoke.mjs` 新增三条断言，并**做过反向变异**确认它们真的会红：
+  - 脉冲间隔必须是 `[1000, 5000]`；
+  - 空闲脉冲 `columnRect / headerRect` 读取次数必须都是 **0**（把 `refresh: refreshIfStale` 改回 `refresh: schedule` ⇒ 立刻报 `an idle pulse must not read the column rect`）；
+  - header 被替换（`isConnected=false`）时必须触发一次重测。
+- `verify/widget-smoke.mjs` 新增四条样式断言：卡片必须用 `bg-layer-1`、全表无 `backdrop-filter`、无 `infinite`、无 `will-change`（把 `backdrop-filter` 注回去 ⇒ 立刻报 `no backdrop-filter`）。断言改为在**去掉注释后的规则文本**上匹配，避免注释里的词句造成假红/假绿。
+- 六套验证全绿：core 41、monitor 17、widget-smoke **371**、integration、notify、auto-repeat；`build.mjs --check` 通过。
+- 观感：3× 与 2× 截图确认收缩态（明暗两主题）与展开态在纯白/纯黑下可读，展开卡片设置区少了「不透明度」一行，其余顺序不变。
+
+**未验证 / 已知边界：**
+
+- 帧时间**没能实测**：本机 headless Edge 的 CDP 通道在沙箱里一直挂起（`--virtual-time-budget` 又会把渲染开销抹平），所以没有「改前 32 ms / 改后 16 ms」这种读数。上面给的是**可复跑的代码级断言**（脉冲频率、布局读次数、样式禁用），不是帧率数字。
+- 「动画期间自动提升合成层」是浏览器行为，未逐帧取证；若日后发现展开/收起瞬间掉帧，可在过渡开始/结束时手动加/撤 `will-change`。
