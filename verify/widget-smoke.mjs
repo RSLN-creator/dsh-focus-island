@@ -507,7 +507,7 @@ ok(/text-align: center/.test(css), 'expanded countdown centered');
 ok(/\.dfi-pillRes \{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/.test(css), 'collapsed micro row is a 4-column strip');
 ok(/\.dfi-pillRes \{[\s\S]*var\(--dfi-scale/.test(css), 'micro row scales with collapsedScale');
 ok(!/\.dfi-microLabel|\.dfi-microVal|\.dfi-microTop/.test(css), 'collapsed strip has no label/value text styles');
-ok(/\.dfi-pillRes \{[\s\S]*padding: 0 40px calc\(9px \* var\(--dfi-scale, 1\.2\)\) calc\(7px \* var\(--dfi-scale, 1\.2\)\)/.test(css), 'bars share the top row insets (ring left edge, chevron reserve on the right)');
+ok(/\.dfi-pillRes \{[\s\S]*padding: calc\(5px \* var\(--dfi-scale, 1\.2\)\) calc\(12px \* var\(--dfi-scale, 1\.2\)\) calc\(12px \* var\(--dfi-scale, 1\.2\)\)/.test(css), 'bars are centred symmetrically and clear of the ring above');
 ok(/\.dfi-card\[data-mode='collapsed'\] \{[\s\S]*calc\(216px \* var\(--dfi-scale/.test(css), 'capsule width scales with collapsedScale');
 ok(/\.dfi-ringWrap \{[\s\S]*calc\(30px \* var\(--dfi-scale/.test(css), 'ring scales with collapsedScale');
 ok(/\.dfi-clock \{[\s\S]*calc\(15px \* var\(--dfi-scale/.test(css), 'capsule clock font scales with collapsedScale');
