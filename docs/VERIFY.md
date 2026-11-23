@@ -174,3 +174,20 @@ Host 半（资源路由）验证：bundle 关/开一次后，
 - 断言：widget-smoke **389** 项，新增「每个 font-size 都必须落在字阶上」的遍历断言（把任一 `11px` 改成 `11.5px` ⇒ 立刻报 stray），以及「三个提醒包装层不得有水平 padding」「`.dfi-expHdr` 单一内边距」两条几何断言。
 
 **验证**：core 43、monitor 17、widget-smoke 389、integration、notify、auto-repeat 全绿；`build.mjs --check` 通过。
+## 13. 第十一轮改动摘要（移除自定义任务 + 胶囊底部留白）
+
+- 移除设置里的「自定义任务」分区及其全部下游：任务名/时长表单、两栏倒计时、蓝色「任务时间到」卡、`createTaskSeat`、`api.getTask/startTask/cancelTask/clearTask`、`taskDone` 通知与短促提示音。`lib/widget.js`、`lib/client-main.js`、`lib/notify.js` 共删除约 280 行，未遗留任何 `task*` 符号（生成物 `lib/client.js` 同步重建）。
+- 设置区从四个框收为三个：提醒间隔 / 外观与其他 / 通知。
+- 修复收缩态底部留白：12px 下内边距从资源条 `.dfi-pillRes` 移到胶囊 `.dfi-pill` 上。隐藏「显示资源占用」时资源条整行消失，圆环不再贴住胶囊底边；资源条显示时总高度不变（仍是「圆环 12px 上 + 7px 条距 + 12px 底」）。
+- headless Chromium 实测（真实 widget CSS）：三档尺寸 × 资源开/关，圆环或彩条到胶囊底边均为 `12 × scale`（1.0 / 1.2 / 1.4 分别为 12 / 14.6 / 17.2 px）；资源关闭时胶囊高度 54 / 65 / 76 px，资源开启时 66 / 79 / 92 px，无裁切。
+- 静态断言更新：`.dfi-pill` 必须带底部 12px，`.dfi-pillRes` 底部为 0；「自定义任务」相关文案与节点断言全部移除。
+- 验证：core 43、monitor 17、widget-smoke 316、notify、auto-repeat、integration 全绿；`build.mjs --check` 通过。
+
+## 14. 第十二轮改动摘要（动效/内存、颜色与字阶统一、可输入区间）
+
+- **动效与内存**：卡片投影从 16px 大范围阴影降为单一的 `0 1px 4px`（morph 时不再每帧重栅格化整圈阴影）；hover 只换底色，不再移动/加深阴影；`width/height` 形变 420ms→240ms 并去掉 `border-radius` 过渡；`.dfi-card` 加 `contain: layout paint style`、`.dfi-content` 加 `contain: layout paint`，把每帧布局/绘制隔离在岛内部；墙钟只在 HH:MM 变化时有意义，tick 1s→30s（倒计时仍走 core 的每秒发布）。
+- **跳过按钮**：去掉图标后的「跳过」二字，跳过与设置统一为 28×28 图标按钮，`title`/`aria-label` 保留完整语义。
+- **颜色统一**：计时中的圆环、展开态进度条、两个开关统一为 `--dsw-alias-state-business-primary`（DeepSeek 蓝）；进度条去掉二次渐变；暂停琥珀 / 到点红仅保留为状态色。
+- **间隔区间**：core `DURATION_MIN/MAX` 改 **5 / 180**；设置里数字框可直接键入任意整数，± 仍按 5 分钟步进，预设 5/15/30/45/60/180。自动再来改 **0–10**（0 = 关闭，提示文案切换）；Host 侧 clamp 与自动重启条件同步（0 不再自动再来）。
+- **字阶**：新增最底档 **10**，用于「紧凑/标准/大」「中文/English」「测试」与预设 chips；普通按钮文字 12.5→12；步进数字框 12。
+- 验证：core 43、monitor 17、widget-smoke 325、notify、auto-repeat、integration 全绿；`build.mjs --check` 通过。新增断言：三处强调色必须是同一个 business token、hover 不得重绘阴影、卡片必须 `contain`、跳过按钮必须为纯图标、两个数字框的 min/max 必须为 `[5,180]` 与 `[0,10]`。

@@ -4,7 +4,7 @@
  * Proves that the module imports without DOM access, exports the contract,
  * ships token-only CSS, and renders every visual state through a tiny hook
  * runtime (useState/useRef/useEffect) so clicks, Escape, persisted prefs,
- * custom-task API calls and live resource samples can be exercised without a
+ * live resource samples can be exercised without a
  * browser.
  *
  * Run: node verify/widget-smoke.mjs
@@ -111,24 +111,6 @@ const BASE_STATE = {
   pauseReason: null,
 };
 
-const TASK_ACTIVE = {
-  name: '写周报',
-  durationMs: 30 * 60000,
-  remainingMs: 12 * 60000 + 34000,
-  elapsedMs: 17 * 60000 + 26000,
-  progress: (17 * 60000 + 26000) / (30 * 60000),
-  done: false,
-};
-
-const TASK_DONE = {
-  name: '写周报',
-  durationMs: 30 * 60000,
-  remainingMs: 0,
-  elapsedMs: 30 * 60000,
-  progress: 1,
-  done: true,
-};
-
 function makeCore(initial) {
   const state = Object.assign({}, BASE_STATE, initial || {});
   const listeners = new Set();
@@ -164,29 +146,22 @@ function makeApi(options) {
   const core = opts.core || makeCore(opts.state);
   const prefs = Object.assign({}, opts.prefs || {});
   const persisted = [];
-  const taskCalls = [];
   let sample = opts.resources === undefined
     ? { cpu: 23, gpu: 61, mem: 47, temp: 64, updatedAt: 1 }
     : opts.resources;
-  let task = opts.task === undefined ? null : opts.task;
   let notifyEnabled = opts.notifyEnabled === undefined ? true : opts.notifyEnabled !== false;
   let soundEnabled = opts.soundEnabled === undefined ? true : opts.soundEnabled !== false;
   let notifyPermission = opts.notifyPermission || 'default';
-  let autoRepeat = opts.autoRepeat === undefined ? 2 : Math.min(60, Math.max(1, Math.round(Number(opts.autoRepeat) || 2)));
+  let autoRepeat = opts.autoRepeat === undefined ? 2 : Math.min(10, Math.max(0, Math.round(Number(opts.autoRepeat) || 0)));
   const autoRepeatCalls = [];
   const notifyCalls = [];
   const notifyListeners = new Set();
   const resourceListeners = new Set();
-  const taskListeners = new Set();
   let locale = opts.locale || 'zh';
   const localeListeners = new Set();
 
   function emitNotify() {
     for (const listener of notifyListeners) listener();
-  }
-
-  function emitTask() {
-    for (const listener of taskListeners) listener(task);
   }
 
   const api = {
@@ -205,18 +180,6 @@ function makeApi(options) {
     setResourceMode(mode) { persisted.push(['resourceMode', mode]); api.resourceMode = mode; },
     persist(key, value) { persisted.push([key, value]); prefs[key] = value; },
     loadPref(key, fallback) { return Object.prototype.hasOwnProperty.call(prefs, key) ? prefs[key] : fallback; },
-    getTask: () => task,
-    subscribeTask(listener) { taskListeners.add(listener); return () => taskListeners.delete(listener); },
-    startTask(input) {
-      const name = input && input.name ? String(input.name) : '任务';
-      const minutes = Math.max(1, Math.round(Number(input && input.minutes) || 25));
-      taskCalls.push(['startTask', { name: name, minutes: minutes }]);
-      const durationMs = minutes * 60000;
-      task = { name: name, durationMs: durationMs, remainingMs: durationMs, elapsedMs: 0, progress: 0, done: false };
-      emitTask();
-    },
-    cancelTask() { taskCalls.push(['cancelTask']); task = null; emitTask(); },
-    clearTask() { taskCalls.push(['clearTask']); task = null; emitTask(); },
     getNotifyEnabled: () => notifyEnabled,
     setNotifyEnabled(enabled) {
       notifyCalls.push(['setNotifyEnabled', enabled !== false]);
@@ -238,17 +201,15 @@ function makeApi(options) {
     getAutoRepeatMinutes: () => autoRepeat,
     setAutoRepeatMinutes(minutes) {
       autoRepeatCalls.push(['setAutoRepeatMinutes', minutes]);
-      autoRepeat = Math.min(60, Math.max(1, Math.round(Number(minutes) || 2)));
+      autoRepeat = Math.min(10, Math.max(0, Math.round(Number(minutes)) || 0));
     },
     autoRepeatCalls,
     setNotifyPermission(next) { notifyPermission = next; emitNotify(); },
     persisted,
-    taskCalls,
     setSample(next) {
       sample = next;
       for (const listener of resourceListeners) listener(next);
     },
-    setTask(next) { task = next; emitTask(); },
     emitLocale(next) {
       locale = next;
       for (const listener of localeListeners) listener(next);
@@ -434,15 +395,13 @@ const REQUIRED = [
   'title', 'action.collapse', 'action.expand', 'action.skip', 'action.settings', 'action.restart',
   'skip.title', 'skip.body', 'skip.cancel', 'skip.confirm', 'finished.title', 'finished.body',
   'settings.duration', 'settings.durationHint', 'settings.resources',
-  'settings.interval', 'settings.autoRepeat', 'settings.autoRepeatHint',
-  'settings.box.duration', 'settings.box.task',
+  'settings.interval', 'settings.autoRepeat', 'settings.autoRepeatHint', 'settings.autoRepeatOff',
+  'settings.box.duration',
   'settings.box.appearance', 'settings.box.notify', 'settings.notify', 'settings.notifyHint',
   'settings.sound', 'action.test', 'settings.collapsedSize', 'settings.size.compact',
   'settings.size.normal', 'settings.size.large', 'settings.language',
   'resources.title', 'resources.cpu', 'resources.gpu', 'resources.mem', 'resources.temp',
-  'resources.na', 'task.running', 'task.remaining', 'task.name', 'task.namePlaceholder',
-  'task.duration', 'task.start', 'task.stop', 'task.doneTitle', 'task.doneBody',
-  'task.again', 'task.clear', 'focus.passive', 'unit.min', 'unit.minutes',
+  'resources.na', 'unit.min', 'unit.minutes',
 ];
 REQUIRED.forEach((key) => {
   ok(Object.prototype.hasOwnProperty.call(COPY.zh, key), 'zh copy has ' + key);
@@ -459,11 +418,6 @@ eq(COPY.zh['resources.temp'], 'GPU 温度', 'temperature is GPU temperature (zh)
 eq(COPY.en['resources.temp'], 'GPU TEMP', 'temperature is GPU temperature (en)');
 eq(COPY.en['resources.mem'], 'RAM', 'memory label (en)');
 eq(COPY.zh['resources.na'], '--', 'missing placeholder');
-eq(COPY.zh['task.doneTitle'], '任务时间到', 'task done title');
-eq(COPY.zh['task.again'], '再来一次', 'task again copy');
-eq(COPY.zh['task.clear'], '知道了（清除）', 'task clear copy');
-eq(COPY.zh['focus.passive'], '被动停留', 'passive column label');
-eq(COPY.zh['settings.box.task'], '自定义任务', 'task settings box title');
 eq(COPY.zh['settings.box.appearance'], '外观与其他', 'appearance box title');
 eq(COPY.zh['settings.box.notify'], '通知', 'notification box title');
 eq(COPY.zh['settings.notify'], '桌面通知', 'desktop notification label');
@@ -473,7 +427,6 @@ eq(COPY.zh['action.test'], '测试', 'test button copy');
 eq(COPY.en['action.test'], 'Test', 'test button copy (en)');
 eq(COPY.zh['settings.size.normal'], '标准', 'collapsed size option');
 ok(COPY.zh['finished.title'].includes('{n}'), 'finished.title template var');
-ok(COPY.zh['task.doneBody'].includes('{name}'), 'task.doneBody template var');
 
 // source hygiene
 ok(!/document\s*\./.test(source), 'module never touches document.*');
@@ -481,7 +434,6 @@ ok(!/\bwindow\s*\./.test(source), 'module never touches window.*');
 ok(!/statusText|dfi-status|dfi-underline/.test(source), 'no status text row and no pill progress bar');
 ok(source.includes("setInterval(function () { setClock(new Date()); }, CLOCK_TICK_MS)"), 'one local wall-clock interval');
 ok(!/getResourceMode/.test(source), 'no extra api dependencies (getResourceMode unused)');
-ok(source.includes("api.startTask({ name: name.slice(0, 60), minutes: clampTaskMinutes(taskMinutesDraft) })"), 'task start goes through api.startTask');
 
 // CSS
 const styleProbe = mount(makeApi({ prefs: { expanded: false } }));
@@ -498,6 +450,11 @@ ok(!/#[0-9a-fA-F]{3,8}\b/.test(cssRules), 'no hardcoded hex colors');
 ok(!/1px solid var\(--dsw-alias-border/.test(css), 'neutral borders are hairlines');
 ok(/var\(--dsw-alias-/.test(css), 'uses theme aliases');
 ok(/stroke-dashoffset/.test(css), 'progress ring drifts via stroke-dashoffset');
+ok(/\.dfi-ringWrap \{[^}]*color: var\(--dsw-alias-state-business-primary\);/.test(css), 'counting ring uses the same accent as the countdown bar');
+ok(/\.dfi-barFill \{[\s\S]*background: var\(--dsw-alias-state-business-primary\);/.test(css) && !/linear-gradient\(90deg, color-mix/.test(css), 'bar fill is one solid accent, no second gradient colour');
+ok(/\.dfi-switch\[aria-checked='true'\] \{ background: var\(--dsw-alias-state-business-primary\); \}/.test(css), 'switches use the same accent as the ring and the bar');
+ok(/\.dfi-card \{[\s\S]*contain: layout paint style;/.test(css), 'card contains layout and paint work');
+ok(!/\.dfi-card:hover \{[^}]*box-shadow/.test(css), 'hover no longer repaints a larger shadow');
 ok(/\.dfi-card \{[\s\S]*background: var\(--dsw-alias-bg-layer-1, var\(--dsw-alias-bg-overlay\)\)/.test(css), 'card paints the opaque official surface');
 ok(!/backdrop-filter/.test(cssRules), 'no backdrop-filter: the card never samples what is behind it');
 ok(!/specific-menu/.test(cssRules), 'card does not use the translucent menu token');
@@ -513,9 +470,10 @@ ok(/text-align: center/.test(css), 'expanded countdown centered');
 ok(/\.dfi-pillRes \{[\s\S]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/.test(css), 'collapsed micro row is a 4-column strip');
 ok(/\.dfi-pillRes \{[\s\S]*var\(--dfi-scale/.test(css), 'micro row scales with collapsedScale');
 ok(!/\.dfi-microLabel|\.dfi-microVal|\.dfi-microTop/.test(css), 'collapsed strip has no label/value text styles');
+ok(/\.dfi-pill \{[\s\S]*padding: 0 0 calc\(12px \* var\(--dfi-scale, 1\.2\)\)/.test(css), 'capsule owns the bottom 12px inset, so hiding the strip cannot remove it');
 ok(/\.dfi-pillTop \{[\s\S]*padding: calc\(12px \* var\(--dfi-scale, 1\.2\)\) 40px 0 calc\(12px \* var\(--dfi-scale, 1\.2\)\)/.test(css), 'ring sits on the shared 12px inset (top and left)');
 ok(!/\.dfi-pillTop \{[\s\S]*height: calc\(34px/.test(css), 'the 34px row no longer pins the ring against the top edge');
-ok(/\.dfi-pillRes \{[\s\S]*padding: calc\(7px \* var\(--dfi-scale, 1\.2\)\) calc\(12px \* var\(--dfi-scale, 1\.2\)\) calc\(12px \* var\(--dfi-scale, 1\.2\)\)/.test(css), 'bars keep the signed-off bottom 12px and share the 12px side inset');
+ok(/\.dfi-pillRes \{[\s\S]*padding: calc\(7px \* var\(--dfi-scale, 1\.2\)\) calc\(12px \* var\(--dfi-scale, 1\.2\)\) 0/.test(css), 'bars keep the 7px top gap and share the 12px side inset');
 ok(/\.dfi-chevronBox \{[\s\S]*top: calc\(\(27px \* var\(--dfi-scale, 1\.2\)\) - 17px\)/.test(css), 'chevron box centres on the ring axis');
 ok(/\.dfi-card\[data-mode='collapsed'\] \{[\s\S]*calc\(216px \* var\(--dfi-scale/.test(css), 'capsule width scales with collapsedScale');
 ok(/\.dfi-ringWrap \{[\s\S]*calc\(30px \* var\(--dfi-scale/.test(css), 'ring scales with collapsedScale');
@@ -533,20 +491,18 @@ ok(/\.dfi-settings \{[\s\S]*gap: 8px/.test(css), 'settings boxes are 8px apart')
 ok(/\.dfi-setBoxTitle \{[\s\S]*padding: 8px 10px 6px;[\s\S]*font-size: 11px;[\s\S]*font-weight: 500/.test(css), 'box titles are compact 11px/500');
 ok(/\.dfi-setRow \{[\s\S]*padding: 0 10px/.test(css), 'settings rows use 10px inset padding');
 ok(/\.dfi-chipsRow \{[\s\S]*gap: 6px;[\s\S]*padding: 0 10px 8px/.test(css), 'preset chips sit 6px apart');
-ok(/\.dfi-chip \{[\s\S]*padding: 0 8px;[\s\S]*border-radius: 7px;[\s\S]*font-size: 11px/.test(css), 'preset chips are 11px / 24px / 7px');
+ok(/\.dfi-chip \{[\s\S]*padding: 0 8px;[\s\S]*border-radius: 7px;[\s\S]*font-size: 10px/.test(css), 'preset chips are 10px / 24px / 7px');
 ok(/\.dfi-chip\[data-active='true'\] \{[\s\S]*inset 0 0 0 1px var\(--dsw-alias-button-ghost-active-border\)/.test(css), 'active chip has a 1px border');
-ok(/\.dfi-taskInput \{[\s\S]*padding: 0 8px;[\s\S]*border-radius: 7px;[\s\S]*font-size: 11px/.test(css), 'task input is 11px / 28px / 7px');
-ok(/\.dfi-taskInput::placeholder \{ color: var\(--dsw-alias-label-secondary\); \}/.test(css), 'task placeholder is secondary at the same size');
 ok(/\.dfi-seg \{[\s\S]*gap: 4px/.test(css), 'segmented control gap is 4px');
-ok(/\.dfi-segBtn \{[\s\S]*height: 24px;[\s\S]*padding: 0 8px;[\s\S]*font-size: 11px/.test(css), 'segment buttons are 11px / 24px');
-ok(/\.dfi-btnTest \{[\s\S]*height: 22px;[\s\S]*padding: 0 8px;[\s\S]*font-size: 11px/.test(css), 'test button is 11px / 22px');
+ok(/\.dfi-segBtn \{[\s\S]*height: 24px;[\s\S]*padding: 0 8px;[\s\S]*font-size: 10px/.test(css), 'segment buttons are 10px / 24px');
+ok(/\.dfi-btnTest \{[\s\S]*height: 22px;[\s\S]*padding: 0 8px;[\s\S]*font-size: 10px/.test(css), 'test button is 10px / 22px');
 ok(/\.dfi-stepper \{[\s\S]*height: 26px/.test(css) && /\.dfi-stepBtn \{[\s\S]*width: 22px;[\s\S]*height: 22px/.test(css), 'stepper buttons are 22x22');
-ok(/\.dfi-stepValue \{[\s\S]*font-size: 12\.5px/.test(css), 'stepper value is 12.5px');
+ok(/\.dfi-stepInput \{[\s\S]*font-size: 12px/.test(css), 'stepper input is 12px');
 ok(!/\.dfi-opacityVal \{[\s\S]*font-size/.test(css), 'no opacity slider styles remain');
 ok(/\.dfi-rowRight \{[\s\S]*align-items: center;[\s\S]*gap: 8px/.test(css), 'switch rows group test + switch with an 8px gap');
 ok(!/--dsw-elevation-panel|--dsw-elevation-prominent|--dsw-elevation-stroke-color/.test(css), 'card shadow no longer uses the elevation hairline tokens');
-ok(/\.dfi-card \{[\s\S]*box-shadow: 0 3px 8px rgba\(0, 0, 0, 0\.04\), 0 0 16px rgba\(0, 0, 0, 0\.03\);/.test(css), 'light card paints a pure projection');
-ok(/\[data-ds-dark-theme\] \.dfi-card \{[\s\S]*0 4px 14px rgba\(0, 0, 0, 0\.28\)/.test(css), 'dark card paints a deeper pure projection');
+ok(/\.dfi-card \{[\s\S]*box-shadow: 0 1px 4px rgba\(0, 0, 0, 0\.05\);/.test(css), 'light card keeps one cheap projection');
+ok(/\[data-ds-dark-theme\] \.dfi-card \{[\s\S]*0 2px 8px rgba\(0, 0, 0, 0\.34\)/.test(css), 'dark card keeps one cheap projection');
 ok(!/\.dfi-card:hover \{[\s\S]{0,120}var\(--dsw-elevation/.test(css), 'hover does not restore the hairline ring');
 ok(/\.dfi-permHint \{[\s\S]*var\(--dsw-alias-label-caption\)/.test(css), 'permission hint is small grey text');
 ok(/\.dfi-autoHint \{[\s\S]*font-size: 11px;[\s\S]*color: var\(--dsw-alias-label-secondary\)/.test(css), 'auto-repeat hint is 11px secondary');
@@ -554,22 +510,17 @@ ok(/\.dfi-root button:focus-visible,[\s\S]*outline-offset: -2px/.test(css), 'key
 ok(!/\.dfi-root \{[^}]*border:/.test(css), 'outer root paints no frame');
 ok(!/\.dfi-content \{[^}]*border:/.test(css), 'content wrapper paints no frame');
 ok(/\.dfi-pill \{[^}]*border: 0;/.test(css), 'capsule explicitly paints no border');
-ok(/\.dfi-bar\.dfi-barCol \{ margin-top: 8px; height: 3px; \}/.test(css), 'column bars are 3px');
 ok(/\.dfi-clockBig \{[\s\S]*font-size: 38px/.test(css), 'single countdown stays 38px');
-ok(/\.dfi-cols \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[\s\S]*gap: 12px/.test(css), 'task mode uses a two-column countdown grid');
-ok(/\.dfi-colClock \{[\s\S]*font-size: 27px/.test(css), 'column countdowns are 27px');
-ok(/\.dfi-barFillTask \{ background: var\(--dsw-alias-state-business-primary\); \}/.test(css), 'task progress uses the brand blue');
 
 /* Every view shares one header geometry. The reminder views used to put 16px
  * of horizontal padding on their wrapper while the header also insets itself,
  * so the title sat 32px in and jumped left when the reminder appeared. */
 ok(/\.dfi-finish \{ padding: 0 0 16px; \}/.test(css), 'finished wrapper adds no horizontal padding');
 ok(/\.dfi-confirm \{ padding: 0 0 16px; \}/.test(css), 'confirm wrapper adds no horizontal padding');
-ok(/\.dfi-taskDone \{ padding: 0 0 16px; \}/.test(css), 'task-done wrapper adds no horizontal padding');
 ok(/\.dfi-btnRow \{[\s\S]*margin: 14px 16px 0;/.test(css), 'reminder action rows sit on the same 16px inset');
 ok(/\.dfi-expHdr \{[\s\S]*padding: 0 42px 0 16px;/.test(css), 'one header inset for every view');
 
-/* One type scale: five steps, and the small controls sit on the lowest one. */
+/* One type scale: six steps, and the compact controls sit on the lowest one. */
 const declared = [];
 for (const block of css.split('}')) {
   const sel = /\.dfi-([A-Za-z]+)\s*\{/.exec(block);
@@ -577,17 +528,14 @@ for (const block of css.split('}')) {
   if (sel && size) declared.push([sel[1], Number(size[1])]);
 }
 ok(declared.length > 8, 'font sizes were actually collected (' + declared.length + ')');
-const allowed = new Set([11, 12, 12.5, 13, 14, 27, 38]);
+const allowed = new Set([10, 11, 12, 12.5, 13, 14, 27, 38]);
 const stray = declared.filter(([, v]) => !allowed.has(v));
-eq(stray.length, 0, 'every font size is on the type scale (11 / 12 / 12.5 / 13 / 14 + clocks): ' + JSON.stringify(stray));
+eq(stray.length, 0, 'every font size is on the type scale (10 / 11 / 12 / 12.5 / 13 / 14 + clocks): ' + JSON.stringify(stray));
 const sizeOf = (name) => (declared.find(([sel]) => sel === name) || [null, null])[1];
-eq(sizeOf('taskInput'), 11, 'task input is on the smallest step');
 ok(sizeOf('seg') === null || sizeOf('seg') === 11, 'segmented control does not add a size of its own');
-eq(sizeOf('segBtn'), 11, '紧凑/标准/大 and 中文/English sit on the smallest step');
-eq(sizeOf('btnTest'), 11, 'the two 测试 buttons sit on the smallest step');
-eq(sizeOf('chip'), 11, 'preset chips sit on the smallest step');
-ok(/\.dfi-card\[data-view='taskDone'\]::before \{[\s\S]*var\(--dsw-alias-state-business-primary\)/.test(css), 'task-done view has a blue wash');
-ok(/\.dfi-taskDoneTitle \{[\s\S]*var\(--dsw-alias-state-business-primary\)/.test(css), 'task-done title is brand blue');
+eq(sizeOf('segBtn'), 10, '紧凑/标准/大 and 中文/English sit on the smallest step');
+eq(sizeOf('btnTest'), 10, 'the two 测试 buttons sit on the smallest step');
+eq(sizeOf('chip'), 10, 'preset chips sit on the smallest step');
 styleProbe.unmount();
 
 // collapsed pill with the resource strip
@@ -643,12 +591,13 @@ const expandedApi = makeApi({ prefs: { expanded: true } });
 const expanded = mount(expandedApi, { rightInset: 0, topInset: 86 });
 eq(expanded.root().props['data-mode'], 'expanded', 'expanded root mode');
 eq(byClass(expanded.tree, 'dfi-clockBig').length, 1, 'big countdown');
-eq(byClass(expanded.tree, 'dfi-cols').length, 0, 'single-column countdown without a task');
 eq(byClass(expanded.tree, 'dfi-barFill').length, 1, 'passive progress bar fill');
 eq(byClass(expanded.tree, 'dfi-status').length, 0, 'no status text row in expanded');
 const actionLabels = collect(expanded.tree, (node) => node.type === 'button').map((node) => node.props['aria-label']).filter(Boolean);
 ok(actionLabels.includes('跳过'), 'skip action');
 ok(actionLabels.includes('设置'), 'settings action');
+const skipBtn = collect(expanded.tree, (node) => node.type === 'button' && node.props['aria-label'] === '跳过')[0];
+ok(skipBtn && skipBtn.props.className === 'dfi-iconBtn' && textOf(skipBtn) === '', 'skip is an icon-only button, matching settings');
 ok(actionLabels.includes('收起'), 'collapse action');
 eq(byClass(expanded.tree, 'dfi-collapse').length, 1, 'top-right collapse hit area');
 eq(byClass(expanded.tree, 'dfi-res').length, 1, 'resource section present');
@@ -673,13 +622,14 @@ expanded.flush();
 // settings: four boxes below the resource section
 expanded.click('设置');
 eq(byClass(expanded.tree, 'dfi-settings').length, 1, 'settings panel opens in-card');
-eq(byClass(expanded.tree, 'dfi-setBox').length, 4, 'four settings boxes');
-same(byClass(expanded.tree, 'dfi-setBoxTitle').map((node) => textOf(node)), ['提醒间隔', '自定义任务', '外观与其他', '通知'], 'settings box titles');
+eq(byClass(expanded.tree, 'dfi-setBox').length, 3, 'three settings boxes');
+same(byClass(expanded.tree, 'dfi-setBoxTitle').map((node) => textOf(node)), ['提醒间隔', '外观与其他', '通知'], 'settings box titles');
 ok(classIndex(expanded.tree, 'dfi-res') < classIndex(expanded.tree, 'dfi-settings'), 'resource section stays above the settings panel');
 const slider = collect(expanded.tree, (node) => node.type === 'input' && node.props.type === 'range')[0];
 eq(slider, undefined, 'no opacity range control any more');
-eq(byClass(expanded.tree, 'dfi-chip').length, 5, 'five duration presets');
-eq(byClass(expanded.tree, 'dfi-chip').map((node) => textOf(node)).join(','), '10,25,45,90,180', 'preset values');
+eq(byClass(expanded.tree, 'dfi-chip').length, 6, 'six duration presets');
+eq(byClass(expanded.tree, 'dfi-chip').map((node) => textOf(node)).join(','), '5,15,30,45,60,180', 'preset values');
+same(byClass(expanded.tree, 'dfi-stepInput').map((node) => [node.props.min, node.props.max]), [[5, 180], [0, 10]], 'duration is free 5-180 and auto-repeat is free 0-10');
 eq(byClass(expanded.tree, 'dfi-switch').length, 3, 'resource + notification + sound switches');
 same(byClass(expanded.tree, 'dfi-switch').map((node) => node.props['aria-label']), ['显示资源占用', '桌面通知', '提示音'], 'switch labels');
 ok(byClass(expanded.tree, 'dfi-switch').every((node) => node.props['aria-checked'] === true), 'all three switches default on');
@@ -731,7 +681,7 @@ ok(segLabels.includes('中文') && segLabels.includes('English'), 'language opti
 const autoRow = autoRepeatRow(expanded.tree);
 ok(autoRow, 'auto-repeat row present');
 eq(byClass(autoRow, 'dfi-stepBtn').length, 2, 'auto-repeat stepper has minus and plus');
-eq(textOf(byClass(autoRow, 'dfi-stepValue')[0]), '2 分钟', 'auto-repeat defaults to 2 minutes');
+eq(byClass(autoRow, 'dfi-stepInput')[0].props.defaultValue, '2', 'auto-repeat defaults to 2 minutes');
 const autoHint = byClass(expanded.tree, 'dfi-autoHint')[0];
 ok(autoHint, 'auto-repeat hint present');
 eq(textOf(autoHint), '到点 2 分钟没处理，就自动再计时一轮', 'auto-repeat hint uses the current value');
@@ -745,37 +695,37 @@ ok(idxChips < idxAuto && idxAuto < idxAutoHint && idxAutoHint < idxDurationHint,
 byClass(autoRepeatRow(expanded.tree), 'dfi-stepBtn')[1].props.onClick({});
 expanded.flush();
 ok(expandedApi.autoRepeatCalls.some((entry) => entry[0] === 'setAutoRepeatMinutes' && entry[1] === 3), 'plus calls api.setAutoRepeatMinutes(3)');
-eq(textOf(byClass(autoRepeatRow(expanded.tree), 'dfi-stepValue')[0]), '3 分钟', 'display follows the new value');
+eq(byClass(autoRepeatRow(expanded.tree), 'dfi-stepInput')[0].props.defaultValue, '3', 'display follows the new value');
 eq(textOf(byClass(expanded.tree, 'dfi-autoHint')[0]), '到点 3 分钟没处理，就自动再计时一轮', 'hint follows the new value');
 byClass(autoRepeatRow(expanded.tree), 'dfi-stepBtn')[0].props.onClick({});
 expanded.flush();
 ok(expandedApi.autoRepeatCalls.some((entry) => entry[0] === 'setAutoRepeatMinutes' && entry[1] === 2), 'minus calls api.setAutoRepeatMinutes(2)');
 
 // clamp 1..60 and custom initial value
-const lowApi = makeApi({ prefs: { expanded: true }, autoRepeat: 1 });
+const lowApi = makeApi({ prefs: { expanded: true }, autoRepeat: 0 });
 const low = mount(lowApi, { rightInset: 0, topInset: 86 });
 low.click('设置');
-eq(textOf(byClass(autoRepeatRow(low.tree), 'dfi-stepValue')[0]), '1 分钟', 'reads the current value from api.getAutoRepeatMinutes()');
-ok(byClass(autoRepeatRow(low.tree), 'dfi-stepBtn')[0].props.disabled === true, 'minus is disabled at 1');
+eq(byClass(autoRepeatRow(low.tree), 'dfi-stepInput')[0].props.defaultValue, '0', 'reads the current value from api.getAutoRepeatMinutes()');
+ok(byClass(autoRepeatRow(low.tree), 'dfi-stepBtn')[0].props.disabled === true, 'minus is disabled at 0');
 byClass(autoRepeatRow(low.tree), 'dfi-stepBtn')[0].props.onClick({});
 low.flush();
-ok(lowApi.autoRepeatCalls.every((entry) => entry[0] !== 'setAutoRepeatMinutes' || entry[1] >= 1), 'auto-repeat never drops below 1');
-eq(textOf(byClass(autoRepeatRow(low.tree), 'dfi-stepValue')[0]), '1 分钟', 'clamped at the lower bound');
+ok(lowApi.autoRepeatCalls.every((entry) => entry[0] !== 'setAutoRepeatMinutes' || entry[1] >= 0), 'auto-repeat never drops below 0');
+eq(byClass(autoRepeatRow(low.tree), 'dfi-stepInput')[0].props.defaultValue, '0', 'clamped at the lower bound');
 low.unmount();
-const highApi = makeApi({ prefs: { expanded: true }, autoRepeat: 60 });
+const highApi = makeApi({ prefs: { expanded: true }, autoRepeat: 10 });
 const high = mount(highApi, { rightInset: 0, topInset: 86 });
 high.click('设置');
-eq(textOf(byClass(autoRepeatRow(high.tree), 'dfi-stepValue')[0]), '60 分钟', 'reads 60 minutes');
-ok(byClass(autoRepeatRow(high.tree), 'dfi-stepBtn')[1].props.disabled === true, 'plus is disabled at 60');
+eq(byClass(autoRepeatRow(high.tree), 'dfi-stepInput')[0].props.defaultValue, '10', 'reads 10 minutes');
+ok(byClass(autoRepeatRow(high.tree), 'dfi-stepBtn')[1].props.disabled === true, 'plus is disabled at 10');
 byClass(autoRepeatRow(high.tree), 'dfi-stepBtn')[1].props.onClick({});
 high.flush();
-ok(highApi.autoRepeatCalls.every((entry) => entry[0] !== 'setAutoRepeatMinutes' || entry[1] <= 60), 'auto-repeat never exceeds 60');
-eq(textOf(byClass(autoRepeatRow(high.tree), 'dfi-stepValue')[0]), '60 分钟', 'clamped at the upper bound');
+ok(highApi.autoRepeatCalls.every((entry) => entry[0] !== 'setAutoRepeatMinutes' || entry[1] <= 10), 'auto-repeat never exceeds 10');
+eq(byClass(autoRepeatRow(high.tree), 'dfi-stepInput')[0].props.defaultValue, '10', 'clamped at the upper bound');
 high.unmount();
 
 // duration preset applies through the core and persists
 const chips = byClass(expanded.tree, 'dfi-chip');
-chips[2].props.onClick({});
+chips[3].props.onClick({});
 expanded.flush();
 ok(expandedApi.persisted.some((entry) => entry[0] === 'durationMinutes' && entry[1] === 45), 'duration persisted');
 ok(expandedApi.core.calls.some((entry) => entry[0] === 'setDurationMinutes' && entry[1] === 45), 'duration applied through core');
@@ -819,68 +769,6 @@ expanded.pressKey('Escape');
 eq(byClass(expanded.tree, 'dfi-settings').length, 0, 'Escape closes settings');
 expanded.pressKey('Escape');
 eq(expanded.root().props['data-mode'], 'collapsed', 'Escape collapses');
-
-// custom task: passive + task countdowns side by side
-const taskApi = makeApi({ prefs: { expanded: true }, task: TASK_ACTIVE });
-const taskRun = mount(taskApi, { rightInset: 0, topInset: 86 });
-eq(taskRun.root().props['data-view'], 'normal', 'active task keeps the normal card');
-eq(byClass(taskRun.tree, 'dfi-cols').length, 1, 'two-column countdown block');
-eq(byClass(taskRun.tree, 'dfi-col').length, 2, 'passive column and task column');
-same(byClass(taskRun.tree, 'dfi-colLabel').map((node) => textOf(node)), ['被动停留', '写周报'], 'column labels (passive / task name)');
-same(byClass(taskRun.tree, 'dfi-colClock').map((node) => textOf(node)), ['14:37', '12:34'], 'both countdowns are mm:ss');
-eq(byClass(taskRun.tree, 'dfi-clockBig').length, 0, 'single big countdown replaced in task mode');
-eq(byClass(taskRun.tree, 'dfi-barFillTask').length, 1, 'task 3px bar in the right column');
-const passiveFill = collect(taskRun.tree, (node) => node.props.className === 'dfi-barFill')[0];
-ok(passiveFill, 'passive bar is not the task bar');
-eq(passiveFill.props.style['--dfi-p'], (10 * 60000 + 23000) / (25 * 60000), 'passive progress value');
-eq(byClass(taskRun.tree, 'dfi-barFillTask')[0].props.style['--dfi-p'], TASK_ACTIVE.progress, 'task progress value');
-ok(classIndex(taskRun.tree, 'dfi-cols') < classIndex(taskRun.tree, 'dfi-actions'), 'countdown block precedes the action row');
-taskRun.click('设置');
-ok(textOf(taskRun.tree).includes('进行中'), 'settings box shows the running task');
-ok(textOf(taskRun.tree).includes('停止'), 'settings box has a stop button');
-taskRun.clickText('停止');
-ok(taskApi.taskCalls.some((entry) => entry[0] === 'cancelTask'), 'stop calls api.cancelTask');
-eq(byClass(taskRun.tree, 'dfi-cols').length, 0, 'columns disappear after stop');
-eq(byClass(taskRun.tree, 'dfi-clockBig').length, 1, 'single countdown returns after stop');
-taskRun.unmount();
-
-// custom task: start form
-const startApi = makeApi({ prefs: { expanded: true } });
-const start = mount(startApi, { rightInset: 0, topInset: 86 });
-start.click('设置');
-start.setInput('dfi-taskInput', '写周报');
-start.clickText('开始');
-const startCall = startApi.taskCalls.find((entry) => entry[0] === 'startTask');
-ok(startCall && startCall[1].name === '写周报', 'start passes the task name');
-ok(startCall && startCall[1].minutes === 25, 'start passes the draft duration');
-eq(byClass(start.tree, 'dfi-cols').length, 1, 'started task switches to the two-column countdown');
-start.unmount();
-
-// custom task: finished state (blue, beats the passive reminder)
-const doneApi = makeApi({ prefs: { expanded: true }, task: TASK_DONE, state: { phase: 'finished', watchedMs: 30 * 60000, elapsedMs: 25 * 60000, remainingMs: 0, progress: 1 } });
-const done = mount(doneApi, { rightInset: 0, topInset: 86 });
-eq(done.root().props['data-view'], 'taskDone', 'task done takes priority over the passive reminder');
-eq(byClass(done.tree, 'dfi-taskDoneTitle').length, 1, 'task done block');
-eq(textOf(byClass(done.tree, 'dfi-taskDoneTitle')[0]), '任务时间到', 'task done title');
-eq(textOf(byClass(done.tree, 'dfi-taskDoneName')[0]), '写周报', 'task done name');
-ok(textOf(done.tree).includes('你给「写周报」留的时间到了。'), 'task done body');
-ok(byClass(done.tree, 'dfi-btnTask').length === 1, 'again button uses the task fill');
-done.clickText('再来一次');
-const againCall = doneApi.taskCalls.find((entry) => entry[0] === 'startTask');
-ok(againCall && againCall[1].name === '写周报' && againCall[1].minutes === 30, 'run again restarts the same task');
-doneApi.setTask(TASK_DONE);
-done.flush();
-done.clickText('知道了（清除）');
-ok(doneApi.taskCalls.some((entry) => entry[0] === 'clearTask'), 'clear calls api.clearTask');
-eq(byClass(done.tree, 'dfi-taskDoneTitle').length, 0, 'cleared task returns to the normal card');
-done.unmount();
-
-// a task that finishes while collapsed opens the card too
-const doneCollapsedApi = makeApi({ prefs: { expanded: false }, task: TASK_DONE });
-const doneCollapsed = mount(doneCollapsedApi, { rightInset: 0, topInset: 86 });
-eq(doneCollapsed.root().props['data-mode'], 'expanded', 'finished task auto-expands the card');
-eq(doneCollapsed.root().props['data-view'], 'taskDone', 'finished task shows the blue reminder');
-doneCollapsed.unmount();
 
 // skip confirmation flow
 const confirmApi = makeApi({ prefs: { expanded: true } });
