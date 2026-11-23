@@ -1,6 +1,6 @@
 {
   "name": "dsh-focus-island",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "DeepSeek Harness 插件：右上角灵动岛式「惜时岛」——你只是坐着看 AI 生成、没有参与对话时自动计时，到点提醒这段时间被 AI 一个人用掉了；可展开看本机 CPU/GPU/内存/温度。",
   "keywords": [

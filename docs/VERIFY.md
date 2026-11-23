@@ -191,3 +191,11 @@ Host 半（资源路由）验证：bundle 关/开一次后，
 - **间隔区间**：core `DURATION_MIN/MAX` 改 **5 / 180**；设置里数字框可直接键入任意整数，± 仍按 5 分钟步进，预设 5/15/30/45/60/180。自动再来改 **0–10**（0 = 关闭，提示文案切换）；Host 侧 clamp 与自动重启条件同步（0 不再自动再来）。
 - **字阶**：新增最底档 **10**，用于「紧凑/标准/大」「中文/English」「测试」与预设 chips；普通按钮文字 12.5→12；步进数字框 12。
 - 验证：core 43、monitor 17、widget-smoke 325、notify、auto-repeat、integration 全绿；`build.mjs --check` 通过。新增断言：三处强调色必须是同一个 business token、hover 不得重绘阴影、卡片必须 `contain`、跳过按钮必须为纯图标、两个数字框的 min/max 必须为 `[5,180]` 与 `[0,10]`。
+
+## 15. 第十三轮改动摘要（减少重渲染与零分配热路径）
+
+- **消除双重渲染**：`IslandHost` 原先同时订阅 core／locale／resources，而 widget 内部也各自订阅同一批数据；结果是每次倒计时 tick 都先渲染 host、再渲染 widget 两遍。现在 host 只订阅布局（右栏宽度/header/拖动），数据订阅全部由 widget 自己持有，一次 tick 只渲染一个组件。
+- **静态子树记忆化**：设置面板与四条资源仪表改用 `React.useMemo`，只在各自输入变化时重建；倒计时每秒更新不再重建设置树。资源项与摘要也从每次渲染算两遍改为一次计算、两处复用。
+- **core 热路径零签名分配**：删掉每秒构造的两个数组 + 两个 `join('~')` 字符串 + `Array.from(listeners)` 快照，改为与上一份 state 逐字段比较、直接遍历 Set。每秒少 3 次分配、2 次字符串拼接和 1 次数组拷贝，判断结果完全等价（无哈希碰撞风险）。
+- **Host CPU 采样零重复归一化**：CPU 时间基线改为入库时归一化一次，`normalizeCpuTimes` 对已归一化条目原样返回；每次采样少 16 个临时对象（16 逻辑核），差分公式未变。
+- 验证：core 43、monitor 17、widget-smoke 325、notify、auto-repeat、integration 全绿；`build.mjs --check` 通过；生成物 141,310 字节。
