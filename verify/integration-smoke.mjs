@@ -225,21 +225,21 @@ function storedState() {
   return raw === undefined ? null : JSON.parse(raw)
 }
 
-// --- typing pauses the countdown ------------------------------------------
+// --- typing must NOT pause the countdown ----------------------------------
 composerEl.textContent = '正在写一半的消息'
 const keydown = listeners.get('keydown')
 assert.equal(typeof keydown, 'function', 'keydown listener must be installed')
 keydown({ target: composerEl, key: 'a', shiftKey: false, isComposing: false })
 tick()
 save()
-const paused = storedState()
-assert.ok(paused !== null, 'a snapshot must be persisted')
-assert.equal(paused.phase, 'paused', `typing must pause the countdown (got ${paused && paused.phase})`)
-const pausedElapsed = paused.elapsedMs
+const typingState = storedState()
+assert.ok(typingState !== null, 'a snapshot must be persisted')
+assert.equal(typingState.phase, 'counting', `typing must not pause the clock (got ${typingState && typingState.phase})`)
+const typingElapsed = typingState.elapsedMs
 await sleep(1150)
 tick()
 save()
-assert.equal(storedState().elapsedMs, pausedElapsed, 'paused countdown must not advance')
+assert.ok(storedState().elapsedMs > typingElapsed, 'the clock must keep running while typing')
 
 // --- sending resets it -----------------------------------------------------
 keydown({ target: composerEl, key: 'Enter', shiftKey: false, isComposing: false, metaKey: false, ctrlKey: false, altKey: false })
@@ -260,4 +260,4 @@ for (const factory of ctx._effects) {
 console.log('integration smoke: OK')
 console.log('  overlay registrations: 1')
 console.log('  rightInset from live layout: 420')
-console.log('  typing -> paused, send -> counting, disposal clean')
+console.log('  typing keeps counting, send resets, disposal clean')

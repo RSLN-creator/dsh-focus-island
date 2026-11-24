@@ -462,6 +462,7 @@ ok(/\.dfi-pill:active \{ background: var\(--dsw-alias-interactive-bg-active\); \
 ok(!/\.dfi-pill:active[^}]*transform/.test(css), 'pill press never scales the full capsule');
 ok(!/@keyframes dfi-softin \{ from \{ opacity: 0; transform: scale/.test(css), 'content cross-fade does not scale the card face');
 ok(!/infinite/.test(cssRules), 'no perpetual animation keeps the page out of its idle state');
+ok(!/dfi-probe|MORPH_PROBE|PROBE_WINDOW_MS/.test(source), 'debug probe stays out of the shipped widget');
 ok(!/will-change/.test(cssRules), 'no standing will-change pins the island to a composited layer');
 ok(!/color-mix\(in srgb, var\(--dsw-alias-bg/.test(cssRules), 'card fill is a solid colour, not a mixed alpha');
 ok(/\.dfi-gauge\[data-level='warn'\], \.dfi-micro\[data-level='warn'\] \{ --dfi-level-color: var\(--dsw-alias-state-warn-primary\); \}/.test(css), 'amber threshold token');

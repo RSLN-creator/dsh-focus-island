@@ -237,56 +237,51 @@ test('progress and remaining are consistent', () => {
 // Pause / resume
 // ---------------------------------------------------------------------------
 
-test('typing pauses without resetting; clearing resumes from the frozen value', () => {
+test('typing does not pause: the clock keeps running', () => {
   const h = harness()
   h.tick()
   h.advance(10 * MIN)
   h.tick()
-  const paused = h.core.setPresence({ typing: true })
-  assert.equal(paused.phase, PHASE.PAUSED)
-  assert.equal(paused.pauseReason, 'typing')
-  assert.equal(paused.elapsedMs, 10 * MIN)
-  assert.equal(paused.watchedMs, 10 * MIN)
-  assert.equal(paused.startedAt, null)
-  assert.equal(paused.pausedAt, h.state.t)
+  const typing = h.core.setPresence({ typing: true })
+  assert.equal(typing.phase, PHASE.COUNTING)
+  assert.equal(typing.typing, true)
+  assert.equal(typing.pauseReason, null)
+  assert.equal(typing.pausedAt, null)
+  h.advance(2 * MIN)
+  assert.equal(h.tick().elapsedMs, 12 * MIN)
 
-  h.advance(30 * MIN)
-  const still = h.tick()
-  assert.equal(still.phase, PHASE.PAUSED)
-  assert.equal(still.elapsedMs, 10 * MIN, 'elapsed must stay frozen while typing')
-
-  const resumed = h.core.setPresence({ typing: false })
-  assert.equal(resumed.phase, PHASE.COUNTING)
-  assert.equal(resumed.elapsedMs, 10 * MIN)
-  assert.equal(resumed.startedAt, h.state.t)
-
-  h.advance(5 * MIN)
-  assert.equal(h.tick().elapsedMs, 15 * MIN)
+  const cleared = h.core.setPresence({ typing: false })
+  assert.equal(cleared.phase, PHASE.COUNTING)
+  assert.equal(cleared.typing, false)
+  assert.equal(cleared.elapsedMs, 12 * MIN)
 })
 
-test('a non-empty draft pauses with reason draft', () => {
+test('a non-empty draft does not pause the countdown', () => {
   const h = harness()
   h.tick()
   h.advance(MIN)
   h.tick()
-  const paused = h.core.setPresence({ draftEmpty: false })
-  assert.equal(paused.phase, PHASE.PAUSED)
-  assert.equal(paused.pauseReason, 'draft')
-  assert.equal(paused.elapsedMs, MIN)
+  const draft = h.core.setPresence({ draftEmpty: false })
+  assert.equal(draft.phase, PHASE.COUNTING)
+  assert.equal(draft.draftEmpty, false)
+  assert.equal(draft.pauseReason, null)
   h.advance(3 * MIN)
-  assert.equal(h.tick().elapsedMs, MIN)
+  assert.equal(h.tick().elapsedMs, 4 * MIN)
   h.core.setPresence({ draftEmpty: true })
   h.advance(MIN)
-  assert.equal(h.tick().elapsedMs, 2 * MIN)
+  assert.equal(h.tick().elapsedMs, 5 * MIN)
 })
 
-test('typing has priority over the draft reason', () => {
+test('typing and draft stay visible in state without gating the clock', () => {
   const h = harness()
   h.tick()
   h.advance(MIN)
   h.tick()
   const s = h.core.setPresence({ typing: true, draftEmpty: false })
-  assert.equal(s.pauseReason, 'typing')
+  assert.equal(s.phase, PHASE.COUNTING)
+  assert.equal(s.pauseReason, null)
+  assert.equal(s.typing, true)
+  assert.equal(s.draftEmpty, false)
 })
 
 test('hidden pauses with reason hidden and resumes when visible', () => {
@@ -416,21 +411,21 @@ test('onUserSend resets a skipped countdown and re-arms skipping', () => {
   assert.equal(h.core.skipConfirm().phase, PHASE.SKIPPED)
 })
 
-test('sending presence is treated as a send and pauses until cleared', () => {
+test('sending presence is treated as a send and starts the next round at once', () => {
   const h = harness()
   h.tick()
   h.advance(3 * MIN)
   h.tick()
   const sending = h.core.setPresence({ sending: true })
-  assert.equal(sending.phase, PHASE.PAUSED)
-  assert.equal(sending.pauseReason, 'sending')
+  assert.equal(sending.phase, PHASE.COUNTING)
+  assert.equal(sending.pauseReason, null)
   assert.equal(sending.elapsedMs, 0, 'sending implies a hard reset')
   h.advance(2 * MIN)
-  assert.equal(h.tick().elapsedMs, 0)
+  assert.equal(h.tick().elapsedMs, 2 * MIN, 'the new round counts immediately')
   const cleared = h.core.setPresence({ sending: false })
   assert.equal(cleared.phase, PHASE.COUNTING)
   h.advance(MIN)
-  assert.equal(h.tick().elapsedMs, MIN)
+  assert.equal(h.tick().elapsedMs, 3 * MIN)
 })
 
 test('reset() restarts counting at zero', () => {
@@ -643,7 +638,7 @@ test('snapshot() is a plain JSON-serializable envelope', () => {
   h.advance(10 * MIN)
   h.tick()
   h.core.skipArm()
-  h.core.setPresence({ typing: true })
+  h.core.setPresence({ visible: false })
   const snap = h.core.snapshot()
   assert.equal(snap.v, 1)
   assert.equal(snap.phase, PHASE.PAUSED)
@@ -661,7 +656,7 @@ test('paused snapshot round-trips through JSON into a fresh core', () => {
   a.advance(10 * MIN)
   a.tick()
   a.core.skipArm()
-  a.core.setPresence({ typing: true })
+  a.core.setPresence({ visible: false })
   const snap = a.core.snapshot()
 
   const b = harness({ start: 9_000_000 })
@@ -675,7 +670,7 @@ test('paused snapshot round-trips through JSON into a fresh core', () => {
   assert.deepEqual(b.core.snapshot(), snap)
 
   b.advance(MIN)
-  const resumed = b.core.setPresence({ typing: false })
+  const resumed = b.core.setPresence({ visible: true })
   assert.equal(resumed.phase, PHASE.COUNTING)
   assert.equal(resumed.elapsedMs, 10 * MIN)
   b.advance(MIN)
@@ -777,7 +772,7 @@ test('subscribe notifies on meaningful changes and coalesces elapsed to 1 s', ()
   assert.equal(seen.length, 2, 'one update per watched second')
   assert.equal(seen[1].elapsedMs, 1000)
 
-  h.core.setPresence({ typing: true })
+  h.core.setPresence({ visible: false })
   assert.equal(seen.length, 3, 'a phase change must notify immediately')
   assert.equal(seen[2].phase, PHASE.PAUSED)
 

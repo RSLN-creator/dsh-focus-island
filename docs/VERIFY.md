@@ -20,7 +20,7 @@ ode verify/integration-smoke.mjs | `integration smoke: OK` |
 - `shell.overlay` 恰好一个占位，id `dsh-focus-island`；
 - 伪 `[data-rightbar-col]` 宽 420 → 组件收到 `rightInset === 420`；
 - 伪官方会话 header 高 76 → 组件收到 `topInset === 86`；
-- 伪 composer 写入文字 → 快照 `paused`，等 1.1 s 再 tick `elapsedMs` 不变；
+- 伪 composer 写入文字并按键 → 快照仍是 `counting`，等 1.1 s 再 tick `elapsedMs` 上涨（打字不停表）；
 - 派发非 Shift Enter → 快照回到 `counting` 且 `elapsedMs <= 150`；
 - 卸载无异常。
 
@@ -199,3 +199,12 @@ Host 半（资源路由）验证：bundle 关/开一次后，
 - **core 热路径零签名分配**：删掉每秒构造的两个数组 + 两个 `join('~')` 字符串 + `Array.from(listeners)` 快照，改为与上一份 state 逐字段比较、直接遍历 Set。每秒少 3 次分配、2 次字符串拼接和 1 次数组拷贝，判断结果完全等价（无哈希碰撞风险）。
 - **Host CPU 采样零重复归一化**：CPU 时间基线改为入库时归一化一次，`normalizeCpuTimes` 对已归一化条目原样返回；每次采样少 16 个临时对象（16 逻辑核），差分公式未变。
 - 验证：core 43、monitor 17、widget-smoke 325、notify、auto-repeat、integration 全绿；`build.mjs --check` 通过；生成物 141,310 字节。
+
+## 16. 第十四轮改动摘要（动效改为合成层入场 + 计时不再被输入打断）
+
+- **实测**：旧版 `width/height` 形变在真机上由内置 rAF 探针量到 `69ms max · 2/78 帧 >25ms`，肉眼可见顿挫；把动效整段关掉（瞬时切换）时同样操作 0 掉帧、主观完全顺。结论：卡顿来自逐帧改变卡片宽高（每帧重新栅格化被裁剪的文字），不是挂载成本、也不是资源轮询。
+- **动效重构**：卡片宽高**不再做过渡**（一次布局落到最终尺寸），改为在 `data-mode` 切换时播放入场动画 `dfi-open`——`transform: scale(0.94) → 1` + `opacity 0.55 → 1`，180ms（展开）/140ms（收起），`transform-origin: top right`。整段只动合成层属性，布局与文字栅格化在动画期间一次都不发生；换态瞬间用 `data-swapping`（DOM 属性，非 React state）关掉就地高度过渡，避免高度过渡与缩放入场同时改布局。稳态仍无 `will-change`、无常驻合成层。
+- **内容锚点**：`.dfi-content` 由 `left: 0` 改 `right: 0`。卡片右缘固定在屏幕右侧，文字布局一次成型，窗口在它周围张开；换态时文字既不滑动也不重新折行。
+- **计时语义修正**：暂停条件收窄为**仅「页面隐藏 / 窗口失焦」**。打字、草稿非空、模型在生成都不再冻结计时；发送仍然清零重来。此前「明明没输入却变琥珀暂停」的两个可疑来源同时被切断：composer 的 `MutationObserver` 不再把程序化改动（发送后清空、占位符刷新）当作打字；草稿与打字标志只进状态，不再参与 `blockReason()`。
+- **临时诊断（已移除）**：卡片下方曾有一行 10px 探针（`xxms max · n/m >25ms · k render` + `phase/reason v/t/d/s`）。真机签核读数 `54ms max · 4/64 >25ms · 2 render`，用户判定「速度满意、可以收工」，于是连同 `MORPH_PROBE`、`.dfi-probe` 一起删除；`widget-smoke` 增加断言，防止探针常量或样式回流。
+- 验证：core 43（打字/草稿/发送三组断言改写为「不停表」「发送即新轮」）、monitor 17、widget-smoke 325、notify、auto-repeat、integration 全绿；`build.mjs --check` 通过。
