@@ -44,13 +44,22 @@ function stripLocalImports(source) {
   return source.replace(/^import\s+\{[^}]*\}\s+from\s+'\.\/[^']+'\s*;?\s*$/gm, '')
 }
 
+/** One text form for every input and for the artifact: LF, never CRLF. */
+function lf(text) {
+  return String(text).replace(/\r\n/g, '\n')
+}
+
 /** Read the seven authored parts and return the single artifact text. */
 async function render() {
   const chunks = []
   for (const part of PARTS) {
     let source
     try {
-      source = await readFile(new URL(`lib/${part}`, BASE), 'utf8')
+      /* A Windows checkout with `core.autocrlf=true` hands us CRLF sources. The
+       * artifact is compared byte for byte by `--check`, so the endings must not
+       * depend on the machine that checked the repo out: normalise here, and
+       * `--check` normalises the existing file the same way. */
+      source = lf(await readFile(new URL(`lib/${part}`, BASE), 'utf8'))
     } catch (error) {
       throw new Error(`cannot read lib/${part}: ${error instanceof Error ? error.message : String(error)}`)
     }
@@ -73,7 +82,7 @@ const text = await render()
 const check = process.argv.includes('--check')
 
 if (check) {
-  const current = await readFile(TARGET, 'utf8').catch(() => '')
+  const current = lf(await readFile(TARGET, 'utf8').catch(() => ''))
   if (current !== text) {
     console.error('lib/client.js is stale — run: node build.mjs')
     process.exit(1)

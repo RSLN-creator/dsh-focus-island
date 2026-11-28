@@ -1,0 +1,5 @@
+# Keep the working tree LF on every platform: `node build.mjs --check` compares the
+# generated `lib/client.js` byte for byte, and CRLF checkouts would make it fail
+# before anyone touched a source file. `build.mjs` also normalises its inputs, so
+# either side alone is enough — this keeps `git diff` quiet as well.
+* text=auto eol=lf
