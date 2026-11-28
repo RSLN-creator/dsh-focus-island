@@ -251,39 +251,66 @@ assert.ok(reset !== null, 'send must persist a snapshot')
 assert.equal(reset.phase, 'counting', `send must restart counting (got ${reset.phase})`)
 assert.ok(reset.elapsedMs <= 150, `send must reset elapsed (got ${reset.elapsedMs})`)
 
-// --- a skipped round survives a page reload --------------------------------
-/* Regression: the boot path used to skip restoring `finished` and `skipped`,
- * so reloading after "skip" started a brand-new countdown and the reminder
- * could come back seconds later. The only way to prove the fix is to boot the
- * integration layer twice against the same storage — the state machine test
- * cannot see which snapshot the boot path chose to hand it. */
-storage.set('dsh-focus-island:v1:state', JSON.stringify({
-  v: 1,
-  phase: 'skipped',
-  durationMinutes: 25,
-  elapsedMs: 8 * 60 * 1000,
-  watchedMs: 8 * 60 * 1000,
-  startedAt: null,
-  pausedAt: null,
-  finishedAt: null,
-  skipArmed: false,
-}))
-const reloaded = createFakeCtx()
-plugin.apply(reloaded)
-const reloadIntervals = intervals.slice(2)
-assert.equal(reloadIntervals.length, 2, 'a reload reschedules the same two pulses')
-/* A second island instance listens for the same global events; leaving those
- * registrations in place would let both instances keep a timer alive and the
- * process would never exit. Run the disposal hook first, then read storage. */
-reloadIntervals[1]()  // persistence pulse, before disposal
-const afterReload = storedState()
-for (const factory of reloaded._effects) {
-  const dispose = factory()
-  if (typeof dispose === 'function') dispose()
+// --- a skipped round survives a *reload*, not a cold start ------------------
+/* Regression, twice over. First the boot path skipped restoring `finished` and
+ * `skipped`, so reloading after "skip" started a brand-new countdown and the
+ * reminder could come back seconds later. Then restoring them unconditionally
+ * brought yesterday's reminder back when the app was opened the next morning.
+ *
+ * The two cases are told apart by the heartbeat the persistence pulse writes
+ * (`pulseAt`). Proving it needs two boots against the same storage with
+ * different heartbeat ages, which no unit test can see. */
+function storedRound(pulseAgeMs) {
+  return JSON.stringify({
+    v: 1,
+    phase: 'skipped',
+    durationMinutes: 25,
+    elapsedMs: 8 * 60 * 1000,
+    watchedMs: 8 * 60 * 1000,
+    startedAt: null,
+    pausedAt: null,
+    finishedAt: null,
+    skipArmed: false,
+    ...(pulseAgeMs === null ? {} : { pulseAt: Date.now() - pulseAgeMs }),
+  })
 }
+
+/** Boot the plugin once against the current storage; returns what it persisted. */
+function bootAndReadState() {
+  const before = intervals.length
+  const booted = createFakeCtx()
+  plugin.apply(booted)
+  const bootIntervals = intervals.slice(before)
+  assert.equal(bootIntervals.length, 2, 'a reload reschedules the same two pulses')
+  /* A second island instance listens for the same global events; leaving those
+   * registrations in place would let both instances keep a timer alive and the
+   * process would never exit. Run the disposal hook first, then read storage. */
+  bootIntervals[1]()  // persistence pulse, before disposal
+  const state = storedState()
+  for (const factory of booted._effects) {
+    const dispose = factory()
+    if (typeof dispose === 'function') dispose()
+  }
+  return state
+}
+
+// A heartbeat a second old = a reload inside the same run: keep the round.
+storage.set('dsh-focus-island:v1:state', storedRound(1000))
+const afterReload = bootAndReadState()
 assert.notEqual(afterReload, null, 'the reload must persist a snapshot')
 assert.equal(afterReload.phase, 'skipped', `a skipped round must survive a reload (got ${afterReload.phase})`)
 assert.equal(afterReload.elapsedMs, 8 * 60 * 1000, 'the time counted before skipping must survive the reload')
+
+// A heartbeat ten minutes old = the app was closed: start a fresh round.
+storage.set('dsh-focus-island:v1:state', storedRound(10 * 60 * 1000))
+const afterColdStart = bootAndReadState()
+assert.equal(afterColdStart.phase, 'counting', `a cold start must begin counting, not reopen the old card (got ${afterColdStart.phase})`)
+assert.ok(afterColdStart.elapsedMs < 2000, `a cold start must count from zero (got ${afterColdStart.elapsedMs} ms)`)
+
+// A snapshot from a build without the heartbeat cannot prove it is current.
+storage.set('dsh-focus-island:v1:state', storedRound(null))
+const afterLegacy = bootAndReadState()
+assert.equal(afterLegacy.phase, 'counting', 'a heartbeat-less snapshot is treated as a cold start')
 
 // --- session facts: running + waiting on you, and nothing else --------------
 /* The strict mask used to invent a 「未命名会话 · 深度求索中」 row for a blank
@@ -331,6 +358,9 @@ storage.set('dsh-focus-island:v1:state', JSON.stringify({
   pausedAt: null,
   finishedAt: Date.now(),
   skipArmed: false,
+  /* A heartbeat this fresh means "reload inside the same run", so the finished
+   * round is restored rather than dropped as a cold start. */
+  pulseAt: Date.now(),
 }))
 
 const sessionCtx = createFakeCtx()

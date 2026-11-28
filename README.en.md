@@ -15,13 +15,13 @@ The plugin has no build framework or runtime npm dependencies. Its Client half i
 | Feature | Behavior |
 |---|---|
 | Counted time | Runs while the page is visible and the window has focus. Typing, drafts, and model generation do not pause it. |
-| Reminder interval | 5–180 minutes; 25 minutes by default. The number field accepts direct input, with ± controls in 5-minute steps and presets of 5/15/30/45/60/180 minutes. |
+| Reminder interval | 1–180 minutes; 25 minutes by default. The number field accepts any whole number from 1 to 180, with ± controls in 5-minute steps and presets of 5/15/30/45/60/180 minutes. |
 | Reminder | At the deadline, the expanded card shows the time spent in the conversation window, with a warm status color and a one-shot pulse. |
 | Skip | Requires two steps: arm the action, then confirm. The confirmation explicitly states that the time still counts. A skipped round remains stopped until the next message is sent. |
 | Send resets | Enter (without Shift) in the composer or the main Send button resets the timer. |
 | Auto-repeat | An ignored reminder can start a new round after a configurable delay (0–10 minutes; default 2; 0 disables it). Interacting with the island acknowledges the reminder. |
 | Pause conditions | A hidden page or an unfocused window pauses the timer. Returning resumes from the frozen value. |
-| Persistence | Preferences and timer snapshots are stored locally, so a refresh does not silently restart an active or completed round. |
+| Persistence | Preferences and timer snapshots are stored locally. A **reload inside the same run** resumes the stored round, including a finished or skipped one; **closing the app and opening it again** is a cold start, which counts from zero instead of reopening yesterday's reminder card (decided by the 5-second heartbeat `pulseAt`: older than two minutes means a new run). |
 | Notifications | Desktop notifications and a synthesized Web Audio chime are independently configurable and enabled by default. |
 | Strict mode | When enabled, the deadline displays a full-screen mask with the official pixel whale and the running or pending sessions. It does not offer ordinary skip, collapse, or auto-repeat actions. The two explicit exits either keep strict mode enabled or turn it off; both restart a five-minute round. A pending question automatically yields the screen so it can be answered. |
 
@@ -154,3 +154,5 @@ At the deadline, the plugin can send a browser `Notification` and play a short s
 ## License
 
 MIT
+
+
