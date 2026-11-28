@@ -70,7 +70,7 @@ test('exports: required names are present and nothing else leaks', () => {
     ].sort(),
   )
   assert.deepEqual([...PHASES].sort(), ['counting', 'finished', 'idle', 'paused', 'skipped'])
-  assert.equal(DURATION_MIN_MINUTES, 5)
+  assert.equal(DURATION_MIN_MINUTES, 1)
   assert.equal(DURATION_MAX_MINUTES, 180)
   assert.equal(DEFAULT_DURATION_MINUTES, 25)
 })
@@ -113,9 +113,10 @@ test('clampDurationMinutes: defaults, strings, rounding, bounds', () => {
   assert.equal(clampDurationMinutes('   '), 25)
   assert.equal(clampDurationMinutes({}), 25)
   assert.equal(clampDurationMinutes([]), 25)
+  assert.equal(clampDurationMinutes(1), 1)
   assert.equal(clampDurationMinutes(5), 5)
-  assert.equal(clampDurationMinutes(0), 5)
-  assert.equal(clampDurationMinutes(-30), 5)
+  assert.equal(clampDurationMinutes(0), 1)
+  assert.equal(clampDurationMinutes(-30), 1)
   assert.equal(clampDurationMinutes(10), 10)
   assert.equal(clampDurationMinutes(180), 180)
   assert.equal(clampDurationMinutes(999), 180)
@@ -124,8 +125,8 @@ test('clampDurationMinutes: defaults, strings, rounding, bounds', () => {
   assert.equal(clampDurationMinutes(25.5), 26)
   assert.equal(clampDurationMinutes('45'), 45)
   assert.equal(clampDurationMinutes(' 90 '), 90)
-  assert.equal(clampDurationMinutes(true), 5)
-  assert.equal(clampDurationMinutes(false), 5)
+  assert.equal(clampDurationMinutes(true), 1)
+  assert.equal(clampDurationMinutes(false), 1)
 })
 
 test('initial state is idle, empty and well-formed', () => {
@@ -158,7 +159,7 @@ test('initial state is idle, empty and well-formed', () => {
 test('createFocusCore applies, clamps and defaults the duration option', () => {
   assert.equal(createFocusCore({ now: () => T0 }).getState().durationMinutes, 25)
   assert.equal(createFocusCore({ now: () => T0, durationMinutes: 45 }).getState().durationMinutes, 45)
-  assert.equal(createFocusCore({ now: () => T0, durationMinutes: 3 }).getState().durationMinutes, 5)
+  assert.equal(createFocusCore({ now: () => T0, durationMinutes: 3 }).getState().durationMinutes, 3)
   assert.equal(createFocusCore({ now: () => T0, durationMinutes: 999 }).getState().durationMinutes, 180)
   assert.equal(createFocusCore().getState().durationMinutes, 25)
 })
@@ -587,7 +588,7 @@ test('setDurationMinutes clamps and persists', () => {
   const h = harness()
   assert.equal(h.core.setDurationMinutes(999).durationMinutes, 180)
   assert.equal(h.core.getState().durationMs, 180 * MIN)
-  assert.equal(h.core.setDurationMinutes(1).durationMinutes, 5)
+  assert.equal(h.core.setDurationMinutes(1).durationMinutes, 1)
   assert.equal(h.core.setDurationMinutes('45').durationMinutes, 45)
   assert.equal(h.core.setDurationMinutes(NaN).durationMinutes, 25)
   assert.equal(h.core.setDurationMinutes(undefined).durationMinutes, 25)
@@ -892,3 +893,4 @@ if (failed === 0) {
   console.error(`FAILED ${failed} of ${tests.length} tests`)
   process.exit(1)
 }
+

@@ -630,6 +630,29 @@ ok(actionLabels.includes('跳过'), 'skip action');
 ok(actionLabels.includes('设置'), 'settings action');
 const skipBtn = collect(expanded.tree, (node) => node.type === 'button' && node.props['aria-label'] === '跳过')[0];
 ok(skipBtn && skipBtn.props.className === 'dfi-iconBtn' && textOf(skipBtn) === '', 'skip is an icon-only button, matching settings');
+/* The two action glyphs are one vector family: same 24-box, same 14px render,
+ * same 2px stroke, and the skip glyph is a single closed triangle — the old
+ * trailing bar made it read as a media-player "next track" and sit smaller than
+ * the gear beside it. */
+function iconOf(button) {
+  return collect(button, (node) => node.type === 'svg')[0];
+}
+const gearBtn = collect(expanded.tree, (node) => node.type === 'button' && node.props['aria-label'] === '设置')[0];
+const skipSvg = iconOf(skipBtn);
+const gearSvg = iconOf(gearBtn);
+eq(skipSvg.props.viewBox, gearSvg.props.viewBox, 'skip and settings share one viewBox');
+eq(skipSvg.props.viewBox, '0 0 24 24', 'and that box is the 24 grid');
+eq(skipSvg.props.width, gearSvg.props.width, 'skip and settings render at the same width');
+eq(skipSvg.props.height, gearSvg.props.height, 'skip and settings render at the same height');
+const skipPath = collect(skipSvg, (node) => node.type === 'path')[0];
+const gearPath = collect(gearSvg, (node) => node.type === 'path')[0];
+eq(skipPath.props.strokeWidth, gearPath.props.strokeWidth, 'skip uses the same stroke width as settings');
+eq(skipPath.props.strokeWidth, 2, 'both action icons stroke at 2');
+eq(skipPath.props.fill, 'none', 'skip stays an outline, not a filled media triangle');
+const skipD = String(skipPath.props.d);
+eq(skipD.split('M').length - 1, 1, 'skip is exactly one subpath');
+ok(!/v6\.4|11\.5/.test(skipD), 'the trailing bar is gone');
+ok(/z$/.test(skipD), 'it is one closed triangle');
 ok(actionLabels.includes('收起'), 'collapse action');
 eq(byClass(expanded.tree, 'dfi-collapse').length, 1, 'top-right collapse hit area');
 eq(byClass(expanded.tree, 'dfi-res').length, 1, 'resource section present');
@@ -661,7 +684,7 @@ const slider = collect(expanded.tree, (node) => node.type === 'input' && node.pr
 eq(slider, undefined, 'no opacity range control any more');
 eq(byClass(expanded.tree, 'dfi-chip').length, 6, 'six duration presets');
 eq(byClass(expanded.tree, 'dfi-chip').map((node) => textOf(node)).join(','), '5,15,30,45,60,180', 'preset values');
-same(byClass(expanded.tree, 'dfi-stepInput').map((node) => [node.props.min, node.props.max]), [[5, 180], [0, 10]], 'duration is free 5-180 and auto-repeat is free 0-10');
+same(byClass(expanded.tree, 'dfi-stepInput').map((node) => [node.props.min, node.props.max]), [[1, 180], [0, 10]], 'duration is free 1-180 and auto-repeat is free 0-10');
 eq(byClass(expanded.tree, 'dfi-switch').length, 3, 'resource + notification + sound switches');
 same(byClass(expanded.tree, 'dfi-switch').map((node) => node.props['aria-label']), ['显示资源占用', '桌面通知', '提示音'], 'switch labels');
 ok(byClass(expanded.tree, 'dfi-switch').every((node) => node.props['aria-checked'] === true), 'all three switches default on');
@@ -761,6 +784,28 @@ chips[3].props.onClick({});
 expanded.flush();
 ok(expandedApi.persisted.some((entry) => entry[0] === 'durationMinutes' && entry[1] === 45), 'duration persisted');
 ok(expandedApi.core.calls.some((entry) => entry[0] === 'setDurationMinutes' && entry[1] === 45), 'duration applied through core');
+
+/* Any whole minute in [1, 180] can be typed. The ± buttons keep the five-minute
+ * step and the presets keep their five-minute rhythm; only the floor moved. */
+function typeDuration(raw) {
+  const field = byClass(expanded.tree, 'dfi-stepInput')[0];
+  const target = { value: raw };
+  field.props.onBlur({ target });
+  expanded.flush();
+  return { value: target.value, field };
+}
+const typed37 = typeDuration('37');
+eq(typed37.value, '37', 'an arbitrary minute value is accepted as typed');
+ok(expandedApi.core.calls.some((entry) => entry[0] === 'setDurationMinutes' && entry[1] === 37), 'and applied to the core');
+eq(byClass(expanded.tree, 'dfi-stepInput')[0].props.defaultValue, '37', 'the field shows the applied value');
+const typedOne = typeDuration('1');
+eq(typedOne.value, '1', 'a one-minute interval is accepted');
+ok(expandedApi.core.calls.some((entry) => entry[0] === 'setDurationMinutes' && entry[1] === 1), 'one minute reaches the core');
+eq(typeDuration('0').value, '1', 'below one minute clamps to one, not five');
+eq(typeDuration('181').value, '180', 'above 180 clamps to 180');
+eq(typeDuration('12').value, '12', 'twelve minutes is a legal interval');
+eq(byClass(expanded.tree, 'dfi-stepInput')[0].props.step, 5, '± still steps by five minutes');
+eq(byClass(expanded.tree, 'dfi-chip').map((node) => textOf(node)).join(','), '5,15,30,45,60,180', 'presets are unchanged');
 
 // the opaque surface is fixed: nothing is persisted for it, nothing can change it
 eq(expanded.card().props.style['--dfi-bg'], undefined, 'card carries no alpha variable');
@@ -1198,6 +1243,7 @@ if (process.exitCode) {
 } else {
   console.log('widget smoke: ' + passed + ' checks passed');
 }
+
 
 
 
