@@ -309,3 +309,21 @@ Host 半（资源路由）验证：bundle 关/开一次后，
   （新增「空闲时凭空造行」「有提问时遮罩不让位」两处变异）。
 - **仍未验证**：真机观感；真实 DSH 里提问的 `pendingInteraction` 与遮罩的先手顺序（1 秒脉冲内让位），
   以及通知权限已授时是否真的弹系统通知 —— 需用户真机确认。
+
+## 21. 第十九轮（文档准确性 + 英文 README）
+
+外部只读审计（另一 AI，参考 `main@985ab01`，无写权限）提出的六处文档缺陷逐条对着源码复核，**六处全部属实**，全部修正：
+
+| 文件 | 原描述 | 实际 |
+|---|---|---|
+| `lib/core.js` | `clampDurationMinutes` JSDoc 写 `[10, 240]`、clamp 到 10/240 | 常量与实现都是 `[5, 180]` |
+| `lib/whale.js` | 头部说每轮第一遍是 code 填充 | `fill = 'dots'` 起步，下一轮才切 code |
+| `lib/monitor-client.js` | `@param intervalMs` 默认 2000、正文说 Host 缓存 2000 ms | 默认 5000；Host CPU/内存最多每 1000 ms 刷新、GPU 15 s |
+| `lib/widget.js` | 资源订阅注释写 ~3 s | 客户端 5 s |
+| `build.mjs` | 「four authored parts」；生成 banner 说「composer empty, not typing」「10 min .. 4 h」 | `PARTS` 七个；计时含打字/草稿，区间 5 min–3 h |
+| `README.md` | 资源区写「页面每 2 秒轮询、GPU 4 秒采样」 | 5 s 轮询、GPU 15 s（4 s 实测烧掉一个核心 2.5%） |
+
+- **新增 `README.en.md`**（审计提供的英文版，逐条核对后补上 `dsh plugin add` 安装路径），两份 README 顶部互加语言导航，`package.json` 的 `files` 收录 `README.en.md`。
+- 审计关于「矩阵/数学依赖」的结论保留为不采纳：仓库里没有矩阵求解器，唯一的密集像素负载是严格模式的 Canvas 鲸（192×108 × 137 帧、≤24 FPS），加数学库不会改善它；注释也不做批量删除（widget 的注释大多是生命周期与无障碍理由）。
+- **验证**：`node build.mjs` 重建后 `--check` 与 `build-atlas.mjs --check` 一致；11 个 verify 脚本全通过（core 44 / monitor 17 / widget 422 / whale 20 / notify / auto-repeat / strict / integration / render-smoke 真实 Chromium / mutation 17/17）；`audit-tokens` 0 漂移；七个独立模块 `node --check` 通过；三个 JSON 解析通过；`git diff --check` 干净。
+- **说明**：`lib/client-main.js` 是拼接片段（顶层 `return createIslandPlugin()`），单独 `node --check` 必然报 `Illegal return statement`，它的语法由 `node --check lib/client.js` 与 integration-smoke 覆盖。`render-smoke` 本机有 Chromium 与借用的 `playwright-core`，实际执行而非跳过。
