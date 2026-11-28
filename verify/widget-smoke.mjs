@@ -86,6 +86,16 @@ function buttonByText(tree, label) {
   return collect(tree, (node) => node.type === 'button' && textOf(node) === label)[0] || null;
 }
 
+/** Text of the rendered content only — the in-tree <style> is not UI copy. */
+function uiText(tree) {
+  const parts = [];
+  walk(tree, (node) => {
+    if (node.type === 'style') return;
+    (node.children || []).forEach((child) => { if (typeof child === 'string') parts.push(child); });
+  });
+  return parts.join(' ').trim();
+}
+
 function autoRepeatRow(tree) {
   return collect(tree, (node) => typeof node.props.className === 'string'
     && node.props.className.split(/\s+/).includes('dfi-setRow')
@@ -196,6 +206,7 @@ function makeApi(options) {
     requestNotifyPermission: () => Promise.resolve(notifyPermission),
     testNotify() { notifyCalls.push(['testNotify']); },
     testSound() { notifyCalls.push(['testSound']); },
+    notifyPending() { notifyCalls.push(['notifyPending']); },
     subscribeNotifyPrefs(listener) { notifyListeners.add(listener); return () => notifyListeners.delete(listener); },
     notifyCalls,
     getAutoRepeatMinutes: () => autoRepeat,
@@ -204,6 +215,10 @@ function makeApi(options) {
       autoRepeat = Math.min(10, Math.max(0, Math.round(Number(minutes)) || 0));
     },
     autoRepeatCalls,
+    getSessionTitle: () => (opts.sessionTitle === undefined ? '' : opts.sessionTitle),
+    getRunningSessions: () => (Array.isArray(opts.runningSessions)
+      ? opts.runningSessions
+      : [{ title: opts.sessionTitle === undefined ? '' : opts.sessionTitle, current: true, startedAt: fakeNow.getTime() - 25 * 60 * 1000 }]),
     setNotifyPermission(next) { notifyPermission = next; emitNotify(); },
     persisted,
     setSample(next) {
@@ -478,27 +493,27 @@ ok(/\.dfi-pillRes \{[\s\S]*padding: calc\(7px \* var\(--dfi-scale, 1\.2\)\) calc
 ok(/\.dfi-chevronBox \{[\s\S]*top: calc\(\(27px \* var\(--dfi-scale, 1\.2\)\) - 17px\)/.test(css), 'chevron box centres on the ring axis');
 ok(/\.dfi-card\[data-mode='collapsed'\] \{[\s\S]*calc\(216px \* var\(--dfi-scale/.test(css), 'capsule width scales with collapsedScale');
 ok(/\.dfi-ringWrap \{[\s\S]*calc\(30px \* var\(--dfi-scale/.test(css), 'ring scales with collapsedScale');
-ok(/\.dfi-clock \{[\s\S]*calc\(15px \* var\(--dfi-scale/.test(css), 'capsule clock font scales with collapsedScale');
+ok(/\.dfi-clock \{[\s\S]*calc\(var\(--dfi-fs-2xl\) \* var\(--dfi-scale/.test(css), 'capsule clock font scales with collapsedScale');
 ok(/\.dfi-microTrack \{[\s\S]*calc\(5px \* var\(--dfi-scale/.test(css), 'micro bar height scales with collapsedScale');
 ok(/\.dfi-chevronBox \{[^}]*position: absolute;[^}]*top: calc\(\(27px[^}]*width: 34px;[^}]*height: 34px;/.test(css), 'collapsed chevron is a 34x34 hit area parked on the ring axis');
 ok(/\.dfi-collapse \{[\s\S]*position: absolute;[\s\S]*top: 0;[\s\S]*right: 0;[\s\S]*width: 34px;[\s\S]*height: 34px;/.test(css), 'expanded collapse is the same absolute 34x34 corner');
-ok(/transition: top 140ms[^;]*right 140ms/.test(css), 'top/right use the 140ms transition');
+ok(/transition: top var\(--dfi-dur-fast\)[^;]*right var\(--dfi-dur-fast\)/.test(css), 'top/right use the fast duration token');
 ok(/\.dfi-root\[data-dragging='true'\] \{ transition: none; \}/.test(css), 'dragging disables the position transition');
 ok(/\.dfi-settings \{[\s\S]*margin: 12px 16px 0/.test(css), 'settings uses the card 16px side padding');
 ok(/\.dfi-setBox \{[\s\S]*border: 0\.5px solid var\(--dsw-alias-border-l2\);[\s\S]*background: var\(--dsw-alias-bg-layer-2\)/.test(css), 'settings boxes have a 0.5px border and raised fill');
 ok(/\.dfi-setBoxTitle \{[\s\S]*border-bottom: 0\.5px solid var\(--dsw-alias-border-l2\)/.test(css), 'settings box title divider');
 ok(/\.dfi-setRow \{[\s\S]*min-height: 34px/.test(css), 'settings rows are 34px');
 ok(/\.dfi-settings \{[\s\S]*gap: 8px/.test(css), 'settings boxes are 8px apart');
-ok(/\.dfi-setBoxTitle \{[\s\S]*padding: 8px 10px 6px;[\s\S]*font-size: 11px;[\s\S]*font-weight: 500/.test(css), 'box titles are compact 11px/500');
+ok(/\.dfi-setBoxTitle \{[\s\S]*padding: 8px 10px 6px;[\s\S]*font-size: var\(--dfi-fs-xs\);[\s\S]*font-weight: 500/.test(css), 'box titles are compact xs/500');
 ok(/\.dfi-setRow \{[\s\S]*padding: 0 10px/.test(css), 'settings rows use 10px inset padding');
 ok(/\.dfi-chipsRow \{[\s\S]*gap: 6px;[\s\S]*padding: 0 10px 8px/.test(css), 'preset chips sit 6px apart');
-ok(/\.dfi-chip \{[\s\S]*padding: 0 8px;[\s\S]*border-radius: 7px;[\s\S]*font-size: 10px/.test(css), 'preset chips are 10px / 24px / 7px');
+ok(/\.dfi-chip \{[\s\S]*padding: 0 8px;[\s\S]*border-radius: var\(--dsw-radius-sm\);[\s\S]*font-size: var\(--dfi-fs-2xs\)/.test(css), 'preset chips are 2xs / 24px on the platform sm radius');
 ok(/\.dfi-chip\[data-active='true'\] \{[\s\S]*inset 0 0 0 1px var\(--dsw-alias-button-ghost-active-border\)/.test(css), 'active chip has a 1px border');
 ok(/\.dfi-seg \{[\s\S]*gap: 4px/.test(css), 'segmented control gap is 4px');
-ok(/\.dfi-segBtn \{[\s\S]*height: 24px;[\s\S]*padding: 0 8px;[\s\S]*font-size: 10px/.test(css), 'segment buttons are 10px / 24px');
-ok(/\.dfi-btnTest \{[\s\S]*height: 22px;[\s\S]*padding: 0 8px;[\s\S]*font-size: 10px/.test(css), 'test button is 10px / 22px');
+ok(/\.dfi-segBtn \{[\s\S]*height: 24px;[\s\S]*padding: 0 8px;[\s\S]*font-size: var\(--dfi-fs-2xs\)/.test(css), 'segment buttons are 2xs / 24px');
+ok(/\.dfi-btnTest \{[\s\S]*height: 22px;[\s\S]*padding: 0 8px;[\s\S]*font-size: var\(--dfi-fs-2xs\)/.test(css), 'test button is 2xs / 22px');
 ok(/\.dfi-stepper \{[\s\S]*height: 26px/.test(css) && /\.dfi-stepBtn \{[\s\S]*width: 22px;[\s\S]*height: 22px/.test(css), 'stepper buttons are 22x22');
-ok(/\.dfi-stepInput \{[\s\S]*font-size: 12px/.test(css), 'stepper input is 12px');
+ok(/\.dfi-stepInput \{[\s\S]*font-size: var\(--dfi-fs-sm\)/.test(css), 'stepper input is sm');
 ok(!/\.dfi-opacityVal \{[\s\S]*font-size/.test(css), 'no opacity slider styles remain');
 ok(/\.dfi-rowRight \{[\s\S]*align-items: center;[\s\S]*gap: 8px/.test(css), 'switch rows group test + switch with an 8px gap');
 ok(!/--dsw-elevation-panel|--dsw-elevation-prominent|--dsw-elevation-stroke-color/.test(css), 'card shadow no longer uses the elevation hairline tokens');
@@ -506,12 +521,12 @@ ok(/\.dfi-card \{[\s\S]*box-shadow: 0 1px 4px rgba\(0, 0, 0, 0\.05\);/.test(css)
 ok(/\[data-ds-dark-theme\] \.dfi-card \{[\s\S]*0 2px 8px rgba\(0, 0, 0, 0\.34\)/.test(css), 'dark card keeps one cheap projection');
 ok(!/\.dfi-card:hover \{[\s\S]{0,120}var\(--dsw-elevation/.test(css), 'hover does not restore the hairline ring');
 ok(/\.dfi-permHint \{[\s\S]*var\(--dsw-alias-label-caption\)/.test(css), 'permission hint is small grey text');
-ok(/\.dfi-autoHint \{[\s\S]*font-size: 11px;[\s\S]*color: var\(--dsw-alias-label-secondary\)/.test(css), 'auto-repeat hint is 11px secondary');
+ok(/\.dfi-autoHint \{[\s\S]*font-size: var\(--dfi-fs-xs\);[\s\S]*color: var\(--dsw-alias-label-secondary\)/.test(css), 'auto-repeat hint is xs secondary');
 ok(/\.dfi-root button:focus-visible,[\s\S]*outline-offset: -2px/.test(css), 'keyboard focus ring stays inset');
 ok(!/\.dfi-root \{[^}]*border:/.test(css), 'outer root paints no frame');
 ok(!/\.dfi-content \{[^}]*border:/.test(css), 'content wrapper paints no frame');
 ok(/\.dfi-pill \{[^}]*border: 0;/.test(css), 'capsule explicitly paints no border');
-ok(/\.dfi-clockBig \{[\s\S]*font-size: 38px/.test(css), 'single countdown stays 38px');
+ok(/\.dfi-clockBig \{[\s\S]*font-size: var\(--dfi-fs-hero\)/.test(css), 'single countdown stays on the hero step');
 
 /* Every view shares one header geometry. The reminder views used to put 16px
  * of horizontal padding on their wrapper while the header also insets itself,
@@ -521,17 +536,33 @@ ok(/\.dfi-confirm \{ padding: 0 0 16px; \}/.test(css), 'confirm wrapper adds no 
 ok(/\.dfi-btnRow \{[\s\S]*margin: 14px 16px 0;/.test(css), 'reminder action rows sit on the same 16px inset');
 ok(/\.dfi-expHdr \{[\s\S]*padding: 0 42px 0 16px;/.test(css), 'one header inset for every view');
 
-/* One type scale: six steps, and the compact controls sit on the lowest one. */
+/* One type scale, declared once and only ever read back.
+ *
+ * Every rule now says var(--dfi-fs-*), so the checks below resolve the token
+ * instead of matching a literal — and one of them fails if a literal ever
+ * reappears, which is the invariant the old version could not express. */
 const declared = [];
+const tokenValue = {};
+for (const m of css.matchAll(/--dfi-fs-([a-z0-9]+):\s*([\d.]+)px;/g)) {
+  tokenValue[m[1]] = Number(m[2]);
+}
+ok(Object.keys(tokenValue).length >= 8, 'the type scale is declared (' + Object.keys(tokenValue).length + ' steps)');
 for (const block of css.split('}')) {
   const sel = /\.dfi-([A-Za-z]+)\s*\{/.exec(block);
-  const size = /font-size: ([\d.]+)px/.exec(block);
-  if (sel && size) declared.push([sel[1], Number(size[1])]);
+  const size = /font-size: var\(--dfi-fs-([a-z0-9]+)\);/.exec(block);
+  if (sel && size) declared.push([sel[1], tokenValue[size[1]]]);
 }
 ok(declared.length > 8, 'font sizes were actually collected (' + declared.length + ')');
-const allowed = new Set([10, 11, 12, 12.5, 13, 14, 27, 38]);
+const literalSizes = [];
+for (const block of cssRules.split('}')) {
+  const sel = /\.dfi-([A-Za-z]+)\s*\{/.exec(block);
+  const size = /font-size: (?!var\(--dfi-fs-|calc\(var\(--dfi-fs-)[^;]*;/.exec(block);
+  if (sel && size) literalSizes.push(sel[1] + ' -> ' + size[0]);
+}
+eq(literalSizes.length, 0, 'no rule carries a literal font size: ' + JSON.stringify(literalSizes));
+const allowed = new Set([10, 11, 12, 12.5, 13, 14, 15, 38]);
 const stray = declared.filter(([, v]) => !allowed.has(v));
-eq(stray.length, 0, 'every font size is on the type scale (10 / 11 / 12 / 12.5 / 13 / 14 + clocks): ' + JSON.stringify(stray));
+eq(stray.length, 0, 'every font size is on the type scale (10 / 11 / 12 / 12.5 / 13 / 14 / 15 / 38): ' + JSON.stringify(stray));
 const sizeOf = (name) => (declared.find(([sel]) => sel === name) || [null, null])[1];
 ok(sizeOf('seg') === null || sizeOf('seg') === 11, 'segmented control does not add a size of its own');
 eq(sizeOf('segBtn'), 10, '紧凑/标准/大 and 中文/English sit on the smallest step');
@@ -815,12 +846,331 @@ skipFromReminder.flush();
 ok(textOf(skipFromReminder.tree).includes('你已在这个没有对话的窗口里停留 31 分钟'), 'cancel returns to the reminder');
 skipFromReminder.unmount();
 
+/* A skipped round is its own view now, not a rose-tinted copy of the reminder.
+ *
+ * The old `viewKey()` folded `skipped` into `finished`, so a user who pressed
+ * "skip" was immediately told "you stayed here for 31 minutes" — the opposite
+ * of what they had just asked for. Three things must hold: the view is its own
+ * name, the copy does not claim the budget was spent, and there is no skip
+ * button left (there is nothing to skip). */
+const skippedApi = makeApi({ prefs: { expanded: false }, state: { phase: 'skipped', watchedMs: 31 * 60000, elapsedMs: 12 * 60000, remainingMs: 13 * 60000, progress: 0.48, modelBusy: false } });
+const skipped = mount(skippedApi, { rightInset: 0, topInset: 86 });
+eq(skipped.root().props['data-mode'], 'expanded', 'a skipped round also unfolds the card');
+eq(skipped.root().props['data-view'], 'skipped', 'skipped is its own view, not finished');
+ok(textOf(skipped.tree).includes('本轮已跳过'), 'skipped copy states the round was skipped');
+ok(!textOf(skipped.tree).includes('你已在这个没有对话的窗口里停留'), 'skipped copy never claims the budget was spent');
+ok(!textOf(skipped.tree).includes('31 分钟'), 'skipped copy reports the counted time, not the watched time');
+ok(textOf(skipped.tree).includes('12 分钟'), 'skipped copy reports the time that actually counted');
+ok(byClass(skipped.tree, 'dfi-btnPrimary').length === 1, 'skipped offers restart as the primary action');
+eq(collect(skipped.tree, (node) => node.type === 'button' && textOf(node) === '跳过').length, 0, 'no skip button once the round is already skipped');
+skipped.unmount();
+
 // hidden fullscreen right sidebar
 const hiddenApi = makeApi({});
 const hidden = mount(hiddenApi, { rightInset: -1, topInset: 86 });
 eq(hidden.root().props['data-hidden'], 'true', 'rightInset -1 hides the island');
 eq(hidden.root().props['aria-hidden'], 'true', 'hidden island is aria-hidden');
 hidden.unmount();
+
+/* ---------------------------------------------------------- 严格模式 ------ */
+
+/* The switch lives in 设置 → 外观与其他, not on the card face. Two reasons the
+ * checks below pin this: the mode can blank the whole screen, so it must not sit
+ * at arm's length from a stray click while you are working; and the user asked
+ * for exactly this placement. */
+const strictCardApi = makeApi({ prefs: { expanded: true } });
+const strictCard = mount(strictCardApi, { rightInset: 0, topInset: 86 });
+eq(byClass(strictCard.tree, 'dfi-strictRow').length, 0, 'no 严格模式 row on the card face (expanded, settings closed)');
+ok(!uiText(strictCard.tree).includes('严格模式'), 'the live card never shows the strict-mode control');
+strictCard.click('设置');
+const strictRow = byClass(strictCard.tree, 'dfi-strictRow')[0];
+ok(strictRow !== undefined, '严格模式 row appears inside the settings panel');
+const appearanceBox = byClass(strictCard.tree, 'dfi-setBox')[1];
+ok(appearanceBox !== undefined && classIndex(appearanceBox, 'dfi-strictRow') >= 0, 'it belongs to the 外观与其他 box');
+const strictToggle = byClass(strictCard.tree, 'dfi-strictToggle')[0];
+eq(textOf(byClass(strictToggle, 'dfi-strictLabel')[0]), '严格模式', 'the button text is exactly 严格模式');
+eq(strictToggle.props.role, 'switch', 'the row is the switch control');
+eq(strictToggle.props['aria-checked'], false, 'strict mode is off by default');
+eq(byClass(strictToggle, 'dfi-strictTrack').length, 1, 'the row carries a switch track');
+eq(byClass(strictToggle, 'dfi-strictKnob').length, 1, 'the track carries a knob');
+ok(classIndex(strictCard.tree, 'dfi-localeRow') < classIndex(strictCard.tree, 'dfi-strictRow'), 'the row sits under the language row');
+ok(textOf(strictCard.tree).includes('到点后整屏遮住'), 'the hint next to it explains what turning it on does');
+eq(byClass(strictCard.tree, 'dfi-mask').length, 0, 'no mask while strict mode is off');
+
+// turning it on persists and closes the panel (its effect is behind that panel)
+strictCard.click('严格模式');
+ok(strictCardApi.persisted.some((entry) => entry[0] === 'strictMode' && entry[1] === true), 'strict mode persisted on');
+eq(byClass(strictCard.tree, 'dfi-settings').length, 0, 'turning it on closes the settings panel');
+eq(byClass(strictCard.tree, 'dfi-mask').length, 0, 'turning it on does not mask a running countdown');
+strictCard.click('设置');
+eq(byClass(strictCard.tree, 'dfi-strictToggle')[0].props['aria-checked'], true, 'switch reads back the on state');
+strictCard.unmount();
+
+// collapsed: the capsule never shows the control either
+const strictPillApi = makeApi({ prefs: { expanded: false, strictMode: true } });
+const strictPill = mount(strictPillApi, { rightInset: 0, topInset: 86 });
+eq(byClass(strictPill.tree, 'dfi-strictRow').length, 0, 'the collapsed capsule shows no strict-mode row');
+ok(!uiText(strictPill.tree).includes('严格模式'), 'the capsule never shows the strict-mode control');
+strictPill.unmount();
+
+// strict + finished → the full-screen mask, and nothing else
+const strictMaskApi = makeApi({
+  prefs: { expanded: false, strictMode: true },
+  sessionTitle: '电场电路期末复习资料整理',
+  state: { phase: 'finished', watchedMs: 31 * 60000, elapsedMs: 25 * 60000, remainingMs: 0, progress: 1, modelBusy: false },
+});
+const strictMask = mount(strictMaskApi, { rightInset: 0, topInset: 86 });
+eq(strictMask.root().props['data-strict'], 'true', 'root flags the strict mask');
+eq(strictMask.root().props.role, 'dialog', 'the mask is a dialog');
+eq(byClass(strictMask.tree, 'dfi-mask').length, 1, 'exactly one mask');
+const mask = byClass(strictMask.tree, 'dfi-mask')[0];
+eq(mask.props['aria-modal'], 'true', 'the mask is modal');
+eq(byClass(strictMask.tree, 'dfi-whale').length, 1, 'the official pixel whale canvas is the artwork');
+eq(byClass(strictMask.tree, 'dfi-whale')[0].type, 'canvas', 'the artwork is a canvas, not a redrawn SVG');
+/* Running sessions are the whole content now: the middle "this window watched
+ * N minutes" line was removed by the user, and each row carries its OWN run
+ * duration in the app's own wording (深度求索中，用时 19分25秒 ···). */
+const sessionRows = byClass(strictMask.tree, 'dfi-maskItem');
+eq(sessionRows.length, 1, 'the default single session is still listed as one row');
+eq(textOf(byClass(sessionRows[0], 'dfi-maskName')[0]), '电场电路期末复习资料整理', 'its row carries the conversation name');
+ok(/^深度求索中，用时 \d+(分\d+秒|秒) ···$/.test(textOf(byClass(sessionRows[0], 'dfi-maskUse')[0])),
+  'its row carries that session run duration, in the official wording');
+eq(byClass(strictMask.tree, 'dfi-maskTitle').length, 0, 'no separate title above the list');
+eq(byClass(strictMask.tree, 'dfi-maskLine').length, 0, 'the middle "watched N minutes" line is gone');
+eq(byClass(strictMask.tree, 'dfi-maskFoot').length, 1, 'the exits live in the footer');
+/* Two exits, different scopes: "not this round" vs "not this mode". One button
+ * had to guess which one the user meant, and guessing wrong either traps them
+ * in the mode or silently disables it. */
+const maskButtons = collect(strictMask.tree, (node) => node.type === 'button');
+eq(maskButtons.length, 2, 'the mask offers exactly two exits');
+same(maskButtons.map((node) => textOf(node)), ['跳过本轮', '退出所有严格模式'], 'the two exits are named for their scope');
+// the card is gone: no skip, no restart, no collapse behind the mask
+eq(byClass(strictMask.tree, 'dfi-finish').length, 0, 'the reminder card is replaced, not stacked');
+ok(!textOf(strictMask.tree).includes('重新计时'), 'strict mode never offers a restart');
+ok(!textOf(strictMask.tree).includes('跳过本次提醒'), 'strict mode never offers the countdown skip');
+
+// Escape is not a second exit
+strictMask.pressKey('Escape');
+eq(byClass(strictMask.tree, 'dfi-mask').length, 1, 'Escape does not dismiss the mask');
+
+/* 「跳过本轮」restarts at five minutes and leaves strict mode ON. */
+byClass(strictMask.tree, 'dfi-maskSkip')[0].props.onClick({});
+strictMask.flush();
+ok(strictMaskApi.core.calls.some((entry) => entry[0] === 'setDurationMinutes' && entry[1] === 5), 'the round exit rearms a 5 minute round');
+ok(strictMaskApi.core.calls.some((entry) => entry[0] === 'reset'), 'the round exit resets the countdown');
+ok(strictMaskApi.persisted.some((entry) => entry[0] === 'durationMinutes' && entry[1] === 5), '5 minutes is persisted, so a reload keeps it');
+ok(!strictMaskApi.persisted.some((entry) => entry[0] === 'strictMode' && entry[1] === false), 'the round exit leaves strict mode switched on');
+eq(byClass(strictMask.tree, 'dfi-mask').length, 0, 'the mask is gone');
+strictMask.unmount();
+
+/* 「退出所有严格模式」does the same reset AND switches the mode off. */
+const strictAllApi = makeApi({
+  prefs: { expanded: false, strictMode: true },
+  sessionTitle: '电场电路期末复习资料整理',
+  state: { phase: 'finished', watchedMs: 31 * 60000, elapsedMs: 25 * 60000, remainingMs: 0, progress: 1, modelBusy: false },
+});
+const strictAll = mount(strictAllApi, { rightInset: 0, topInset: 86 });
+byClass(strictAll.tree, 'dfi-maskSkipAll')[0].props.onClick({});
+strictAll.flush();
+ok(strictAllApi.core.calls.some((entry) => entry[0] === 'setDurationMinutes' && entry[1] === 5), 'the mode exit still rearms a 5 minute round');
+ok(strictAllApi.core.calls.some((entry) => entry[0] === 'reset'), 'the mode exit still resets the countdown');
+ok(strictAllApi.persisted.some((entry) => entry[0] === 'strictMode' && entry[1] === false), 'the mode exit turns strict mode off');
+eq(byClass(strictAll.tree, 'dfi-mask').length, 0, 'the mask is gone');
+strictAll.unmount();
+
+/* Multiple running sessions are all listed, current one first, and each one
+ * shows its OWN duration — 19分25秒 for one, 25秒 for another, never one shared
+ * number copied down the list. */
+const nowMs = fakeNow.getTime();
+const multiApi = makeApi({
+  prefs: { expanded: false, strictMode: true },
+  sessionTitle: '电站复习',
+  runningSessions: [
+    { title: '电站复习', current: false, startedAt: nowMs - (3 * 60 + 12) * 1000 },
+    { title: '电场电路期末复习资料整理', current: true, startedAt: nowMs - (19 * 60 + 25) * 1000 },
+    { title: '数据结构实验', current: false, startedAt: nowMs - 25 * 1000 },
+  ],
+  state: { phase: 'finished', watchedMs: 31 * 60000, elapsedMs: 25 * 60000, remainingMs: 0, progress: 1, modelBusy: false },
+});
+const multi = mount(multiApi, { rightInset: 0, topInset: 86 });
+const multiRows = byClass(multi.tree, 'dfi-maskItem');
+eq(multiRows.length, 3, 'all three running sessions are listed');
+same(byClass(multi.tree, 'dfi-maskName').map((node) => textOf(node)),
+  ['电场电路期末复习资料整理', '电站复习', '数据结构实验'],
+  'the current conversation is listed first, the rest keep their order');
+eq(multiRows.filter((node) => node.props['data-current'] === 'true').length, 1, 'exactly one row is marked current');
+same(byClass(multi.tree, 'dfi-maskUse').map((node) => textOf(node)),
+  ['深度求索中，用时 19分25秒 ···', '深度求索中，用时 3分12秒 ···', '深度求索中，用时 25秒 ···'],
+  'each row reports that session\'s own run duration, in the official wording');
+multi.unmount();
+
+// strict + a fullscreen right sidebar: the mask must still cover the frame
+const strictHiddenApi = makeApi({
+  prefs: { expanded: false, strictMode: true },
+  state: { phase: 'finished', watchedMs: 31 * 60000, elapsedMs: 25 * 60000, remainingMs: 0, progress: 1, modelBusy: false },
+});
+const strictHidden = mount(strictHiddenApi, { rightInset: -1, topInset: 86 });
+eq(strictHidden.root().props['data-hidden'], 'false', 'a fullscreen right panel cannot hide the strict mask');
+eq(byClass(strictHidden.tree, 'dfi-mask').length, 1, 'the mask is still up');
+strictHidden.unmount();
+
+// strict + a skipped round: no mask (the user already ended that round)
+const strictSkippedApi = makeApi({
+  prefs: { expanded: false, strictMode: true },
+  state: { phase: 'skipped', watchedMs: 31 * 60000, elapsedMs: 12 * 60000, remainingMs: 13 * 60000, progress: 0.48, modelBusy: false },
+});
+const strictSkipped = mount(strictSkippedApi, { rightInset: 0, topInset: 86 });
+eq(byClass(strictSkipped.tree, 'dfi-mask').length, 0, 'a round skipped before strict mode was switched on is not masked');
+eq(strictSkipped.root().props['data-strict'], 'false', 'root does not claim a mask');
+strictSkipped.unmount();
+
+// strict + counting: no mask, and the switch reads back the persisted value
+const strictCountingApi = makeApi({ prefs: { expanded: true, strictMode: true }, sessionTitle: '未命名' });
+const strictCounting = mount(strictCountingApi, { rightInset: 0, topInset: 86 });
+eq(byClass(strictCounting.tree, 'dfi-mask').length, 0, 'a running countdown is not masked');
+strictCounting.click('设置');
+eq(byClass(strictCounting.tree, 'dfi-strictToggle')[0].props['aria-checked'], true, 'the switch restores from prefs');
+strictCounting.unmount();
+
+// English copy
+const strictEnApi = makeApi({
+  prefs: { expanded: false, strictMode: true },
+  locale: 'en',
+  sessionTitle: 'Field theory review',
+  runningSessions: [{ title: 'Field theory review', current: true, startedAt: fakeNow.getTime() - 90 * 1000 }],
+  state: { phase: 'finished', watchedMs: 31 * 60000, elapsedMs: 25 * 60000, remainingMs: 0, progress: 1, modelBusy: false },
+});
+const strictEn = mount(strictEnApi, { rightInset: 0, topInset: 86 });
+same(collect(strictEn.tree, (node) => node.type === 'button').map((node) => textOf(node)),
+  ['Skip this round', 'Turn strict mode off'], 'both exits are localised');
+eq(textOf(byClass(strictEn.tree, 'dfi-maskName')[0]), 'Field theory review', 'the conversation name is untranslated');
+ok(textOf(byClass(strictEn.tree, 'dfi-maskUse')[0]).startsWith('Deep diving, '), 'the run line is localised');
+strictEn.unmount();
+
+// a missing session name falls back to the localised placeholder
+const strictNoNameApi = makeApi({
+  prefs: { expanded: false, strictMode: true },
+  runningSessions: [{ title: '', current: true, startedAt: fakeNow.getTime() - 60 * 1000 }],
+  state: { phase: 'finished', watchedMs: 31 * 60000, elapsedMs: 25 * 60000, remainingMs: 0, progress: 1, modelBusy: false },
+});
+const strictNoName = mount(strictNoNameApi, { rightInset: 0, topInset: 86 });
+eq(textOf(byClass(strictNoName.tree, 'dfi-maskName')[0]), '未命名会话', 'an unnamed conversation gets a placeholder');
+strictNoName.unmount();
+
+/* ------------------------------------------------- no session: 空闲中 -------- */
+
+/** Fire every 1 s interval the widget owns (the mask's own pulse) once. */
+function pulseMask() {
+  for (const handle of [...intervals]) {
+    if (handle.ms === 1000) handle.fn();
+  }
+}
+
+/* Nothing is running: the mask must say so instead of inventing a session row
+ * that claims to be deep diving. */
+const idleApi = makeApi({
+  prefs: { expanded: false, strictMode: true },
+  runningSessions: [],
+  state: { phase: 'finished', watchedMs: 31 * 60000, elapsedMs: 25 * 60000, remainingMs: 0, progress: 1, modelBusy: false },
+});
+const idle = mount(idleApi, { rightInset: 0, topInset: 86 });
+const idleRows = byClass(idle.tree, 'dfi-maskItem');
+eq(idleRows.length, 1, 'an idle mask still has exactly one row');
+eq(idleRows[0].props['data-idle'], 'true', 'that row is flagged idle');
+eq(textOf(byClass(idle.tree, 'dfi-maskName')[0]), '空闲中', 'the idle row says 空闲中, not a session name');
+ok(/^已停留 \d+秒$/.test(textOf(byClass(idle.tree, 'dfi-maskUse')[0])),
+  'the idle row carries a stopwatch of its own, not a run duration');
+ok(!uiText(idle.tree).includes('深度求索中'), 'an idle mask never claims a session is deep diving');
+ok(!uiText(idle.tree).includes('未命名会话'), 'nor does it invent an untitled session');
+// the idle stopwatch keeps moving: one pulse per second, no frozen numbers
+fakeNow = new realDate(fakeNow.getTime() + 3000);
+pulseMask();
+idle.flush();
+eq(textOf(byClass(idle.tree, 'dfi-maskUse')[0]), '已停留 3秒', 'the idle stopwatch advances every second');
+idle.unmount();
+
+/* A running session's row is live too: the mask used to redraw only when the
+ * 30 s wall clock did, which read as a frozen timer. */
+const tickApi = makeApi({
+  prefs: { expanded: false, strictMode: true },
+  runningSessions: [{ title: '电站复习', current: true, startedAt: fakeNow.getTime() - 25 * 1000 }],
+  state: { phase: 'finished', watchedMs: 31 * 60000, elapsedMs: 25 * 60000, remainingMs: 0, progress: 1, modelBusy: false },
+});
+const ticking = mount(tickApi, { rightInset: 0, topInset: 86 });
+eq(textOf(byClass(ticking.tree, 'dfi-maskUse')[0]), '深度求索中，用时 25秒 ···', 'the row starts at the measured run time');
+fakeNow = new realDate(fakeNow.getTime() + 5000);
+pulseMask();
+ticking.flush();
+eq(textOf(byClass(ticking.tree, 'dfi-maskUse')[0]), '深度求索中，用时 30秒 ···', 'the run duration advances while the mask is up');
+ticking.unmount();
+
+/* ------------------------------------------------- pending question --------- */
+
+/* A question lives in the composer seat, under the mask. The mask has to yield,
+ * or the session is stuck behind a screen that cannot answer anything. */
+const pendingMaskApi = makeApi({
+  prefs: { expanded: false, strictMode: true },
+  runningSessions: [{
+    title: '电场电路期末复习资料整理',
+    current: true,
+    startedAt: fakeNow.getTime() - 60000,
+    pending: true,
+    pendingSince: fakeNow.getTime() - 20000,
+  }],
+  state: { phase: 'finished', watchedMs: 31 * 60000, elapsedMs: 25 * 60000, remainingMs: 0, progress: 1, modelBusy: false },
+});
+const pendingMask = mount(pendingMaskApi, { rightInset: 0, topInset: 86 });
+eq(byClass(pendingMask.tree, 'dfi-mask').length, 0, 'a pending question dismisses the strict mask');
+eq(pendingMask.root().props['data-strict'], 'false', 'root stops claiming the mask');
+ok(pendingMaskApi.core.calls.some((entry) => entry[0] === 'reset'), 'dismissing the mask restarts the round, so the rule is kept');
+ok(pendingMaskApi.notifyCalls.some((entry) => entry[0] === 'notifyPending'), 'and the user is alerted that something is waiting');
+eq(pendingMask.root().props['data-pending'], 'true', 'the island flags the pending question');
+const pendingChip = byClass(pendingMask.tree, 'dfi-pending');
+eq(pendingChip.length, 1, 'the card carries one pending line');
+eq(textOf(pendingChip[0]), '有提问待回答', 'the line says a question is waiting');
+eq(byClass(pendingMask.tree, 'dfi-liveDot')[0].props['data-state'], 'pending', 'the live dot carries the pending state');
+pendingMask.unmount();
+
+/* The capsule is 216px wide: it swaps the wall clock for a two-character word
+ * rather than trying to fit the sentence. */
+const pendingPillApi = makeApi({
+  prefs: { expanded: false, strictMode: false },
+  runningSessions: [{ title: '电站复习', current: true, startedAt: fakeNow.getTime() - 60000, pending: true, pendingSince: fakeNow.getTime() - 5000 }],
+});
+const pendingPill = mount(pendingPillApi, { rightInset: 0, topInset: 86 });
+eq(textOf(byClass(pendingPill.tree, 'dfi-sysClock')[0]), '待回答', 'the capsule says 待回答 in place of the wall clock');
+eq(byClass(pendingPill.tree, 'dfi-sysClock')[0].props['data-pending'], 'true', 'and marks it as the pending variant');
+pendingPill.unmount();
+
+/* Waiting is timed from the wait, not from the (stopped) turn. */
+const pendingWaitApi = makeApi({
+  prefs: { expanded: false, strictMode: true },
+  runningSessions: [{ title: '电站复习', current: true, startedAt: fakeNow.getTime() - 60000, pending: true, pendingSince: fakeNow.getTime() - 12000 }],
+  state: { phase: 'finished', watchedMs: 31 * 60000, elapsedMs: 25 * 60000, remainingMs: 0, progress: 1, modelBusy: false },
+});
+const pendingWait = mount(pendingWaitApi, { rightInset: 0, topInset: 86 });
+// the mask is gone (auto-skip); the row wording is asserted through the row builder
+eq(byClass(pendingWait.tree, 'dfi-mask').length, 0, 'a waiting session also dismisses the mask');
+pendingWait.unmount();
+
+// English idle copy
+const idleEnApi = makeApi({
+  prefs: { expanded: false, strictMode: true },
+  locale: 'en',
+  runningSessions: [],
+  state: { phase: 'finished', watchedMs: 31 * 60000, elapsedMs: 25 * 60000, remainingMs: 0, progress: 1, modelBusy: false },
+});
+const idleEn = mount(idleEnApi, { rightInset: 0, topInset: 86 });
+eq(textOf(byClass(idleEn.tree, 'dfi-maskName')[0]), 'Idle', 'the idle row is localised');
+ok(/^Idle for \d+/.test(textOf(byClass(idleEn.tree, 'dfi-maskUse')[0])), 'the idle stopwatch is localised');
+idleEn.unmount();
+
+// the stylesheet backs the mask with tokens only
+ok(/\.dfi-mask \{[\s\S]*position: fixed;[\s\S]*inset: 0;/.test(css), 'the mask is a fixed full-frame layer');
+ok(/\.dfi-root\[data-strict='true'\] \.dfi-card \{ display: none; \}/.test(css), 'the island card is hidden under the mask');
+ok(/\.dfi-maskFoot \{[\s\S]*right: 24px;[\s\S]*bottom: 24px/.test(css), 'the exit sits in the bottom-right corner');
+ok(/\.dfi-mask \{[\s\S]*justify-content: center;/.test(css), 'the mask content is centred');
+ok(!/#[0-9a-fA-F]{3,8}\b/.test(cssRules), 'the mask adds no hardcoded colours');
 
 // English locale + live locale switch
 const enApi = makeApi({ prefs: { expanded: true }, locale: 'en' });
@@ -848,4 +1198,7 @@ if (process.exitCode) {
 } else {
   console.log('widget smoke: ' + passed + ' checks passed');
 }
+
+
+
 

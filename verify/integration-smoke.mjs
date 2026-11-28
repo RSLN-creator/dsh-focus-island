@@ -251,6 +251,152 @@ assert.ok(reset !== null, 'send must persist a snapshot')
 assert.equal(reset.phase, 'counting', `send must restart counting (got ${reset.phase})`)
 assert.ok(reset.elapsedMs <= 150, `send must reset elapsed (got ${reset.elapsedMs})`)
 
+// --- a skipped round survives a page reload --------------------------------
+/* Regression: the boot path used to skip restoring `finished` and `skipped`,
+ * so reloading after "skip" started a brand-new countdown and the reminder
+ * could come back seconds later. The only way to prove the fix is to boot the
+ * integration layer twice against the same storage — the state machine test
+ * cannot see which snapshot the boot path chose to hand it. */
+storage.set('dsh-focus-island:v1:state', JSON.stringify({
+  v: 1,
+  phase: 'skipped',
+  durationMinutes: 25,
+  elapsedMs: 8 * 60 * 1000,
+  watchedMs: 8 * 60 * 1000,
+  startedAt: null,
+  pausedAt: null,
+  finishedAt: null,
+  skipArmed: false,
+}))
+const reloaded = createFakeCtx()
+plugin.apply(reloaded)
+const reloadIntervals = intervals.slice(2)
+assert.equal(reloadIntervals.length, 2, 'a reload reschedules the same two pulses')
+/* A second island instance listens for the same global events; leaving those
+ * registrations in place would let both instances keep a timer alive and the
+ * process would never exit. Run the disposal hook first, then read storage. */
+reloadIntervals[1]()  // persistence pulse, before disposal
+const afterReload = storedState()
+for (const factory of reloaded._effects) {
+  const dispose = factory()
+  if (typeof dispose === 'function') dispose()
+}
+assert.notEqual(afterReload, null, 'the reload must persist a snapshot')
+assert.equal(afterReload.phase, 'skipped', `a skipped round must survive a reload (got ${afterReload.phase})`)
+assert.equal(afterReload.elapsedMs, 8 * 60 * 1000, 'the time counted before skipping must survive the reload')
+
+// --- session facts: running + waiting on you, and nothing else --------------
+/* The strict mask used to invent a 「未命名会话 · 深度求索中」 row for a blank
+ * conversation nobody was using. The fix lives in the integration layer (it owns
+ * the `useSessions` / `useSessionStatus` pair), so it has to be proven here: a
+ * blank idle session produces no row at all, and the mask falls back to its own
+ * idle state. */
+function findNodes(node, predicate, out = []) {
+  if (node === null || node === undefined) return out
+  if (Array.isArray(node)) {
+    for (const child of node) findNodes(child, predicate, out)
+    return out
+  }
+  if (typeof node !== 'object') return out
+  if (predicate(node)) out.push(node)
+  for (const child of node.children || []) findNodes(child, predicate, out)
+  return out
+}
+const byClass = (tree, name) => findNodes(tree, (node) => typeof node.props.className === 'string'
+  && node.props.className.split(/\s+/).includes(name))
+const textOf = (node) => {
+  const parts = []
+  findNodes(node, () => false)
+  const walk = (current) => {
+    if (current === null || current === undefined) return
+    if (Array.isArray(current)) { current.forEach(walk); return }
+    if (typeof current !== 'object') return
+    for (const child of current.children || []) {
+      if (typeof child === 'string') parts.push(child)
+      else walk(child)
+    }
+  }
+  walk(node)
+  return parts.join(' ').trim()
+}
+
+storage.set('dsh-focus-island:v1:prefs', JSON.stringify({ strictMode: true, expanded: false, locale: 'zh' }))
+storage.set('dsh-focus-island:v1:state', JSON.stringify({
+  v: 1,
+  phase: 'finished',
+  durationMinutes: 25,
+  elapsedMs: 25 * 60 * 1000,
+  watchedMs: 25 * 60 * 1000,
+  startedAt: null,
+  pausedAt: null,
+  finishedAt: Date.now(),
+  skipArmed: false,
+}))
+
+const sessionCtx = createFakeCtx()
+plugin.apply(sessionCtx)
+const sessionOverlay = sessionCtx._registered.find((entry) => entry.options !== undefined
+  && entry.options.name === 'shell.overlay')
+
+/** Render the overlay occupant with a fake session store. */
+function renderWith(sessions, statuses) {
+  hookCursor = 0
+  hookValues.length = 0
+  const host = sessionOverlay.component({
+    useSessions: (selector) => selector(sessions),
+    useSessionStatus: (selector) => selector(statuses),
+  })
+  hookCursor = 0
+  hookValues.length = 0
+  return host.type(host.props)
+}
+
+const blankOnly = {
+  ids: ['s-blank'],
+  byId: { 's-blank': { id: 's-blank', title: '', blank: true } },
+}
+const blankStatus = new Map([['s-blank', { running: false, completionUnread: false }]])
+const idleTree = renderWith(blankOnly, blankStatus)
+assert.equal(idleTree.props['data-strict'], 'true', 'strict + finished still shows the mask')
+const idleRows = byClass(idleTree, 'dfi-maskItem')
+assert.equal(idleRows.length, 1, 'a blank idle conversation adds no row of its own')
+assert.equal(textOf(byClass(idleTree, 'dfi-maskName')[0]), '空闲中', 'the mask says 空闲中 when nothing is running')
+assert.match(textOf(byClass(idleTree, 'dfi-maskUse')[0]), /^已停留 /, 'and carries a stopwatch instead of a run duration')
+
+/* One running session, one session waiting on the user, one blank idle one. */
+const mixed = {
+  ids: ['s-run', 's-blank', 's-wait'],
+  byId: {
+    's-run': { id: 's-run', title: '电站复习', running: true, retainedBy: { mainView: 1 } },
+    's-blank': { id: 's-blank', title: '', blank: true },
+    's-wait': { id: 's-wait', title: '结构实验' },
+  },
+}
+const mixedStatus = new Map([
+  ['s-run', { running: true, completionUnread: false }],
+  ['s-blank', { running: false, completionUnread: false }],
+  ['s-wait', { running: false, pendingInteraction: { key: 'q1', kind: 'question', sessionId: 's-wait' }, completionUnread: false }],
+])
+const mixedTree = renderWith(mixed, mixedStatus)
+const mixedRows = byClass(mixedTree, 'dfi-maskItem')
+assert.equal(mixedRows.length, 2, 'the running and the waiting session are listed, the blank one is not')
+assert.deepEqual(byClass(mixedTree, 'dfi-maskName').map(textOf), ['电站复习', '结构实验'], 'current first, waiting second')
+assert.match(textOf(byClass(mixedTree, 'dfi-maskUse')[0]), /^深度求索中，用时 /, 'the running row reports a run duration')
+assert.match(textOf(byClass(mixedTree, 'dfi-maskUse')[1]), /^等待你的回答，已等 /, 'the waiting row reports how long it has waited')
+assert.equal(mixedTree.props['data-pending'], 'true', 'the island flag is set while something waits')
+
+/* The wait instants are persisted, so a reload does not restart them at 1 s.
+ * `savePrefs()` debounces by 250 ms, hence the wait. */
+await sleep(320)
+const storedPending = JSON.parse(storage.get('dsh-focus-island:v1:prefs') || '{}')
+assert.ok(storedPending.pendingStarts !== undefined, 'the pending edge is remembered across reloads')
+assert.ok(storedPending.pendingStarts['s-wait'] > 0, 'it carries the instant the wait began')
+for (const factory of sessionCtx._effects) {
+  const dispose = factory()
+  if (typeof dispose === 'function') dispose()
+}
+storage.delete('dsh-focus-island:v1:prefs')
+
 // --- disposal --------------------------------------------------------------
 for (const factory of ctx._effects) {
   const dispose = factory()
@@ -261,3 +407,5 @@ console.log('integration smoke: OK')
 console.log('  overlay registrations: 1')
 console.log('  rightInset from live layout: 420')
 console.log('  typing keeps counting, send resets, disposal clean')
+
+

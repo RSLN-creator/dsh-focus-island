@@ -208,3 +208,104 @@ Host 半（资源路由）验证：bundle 关/开一次后，
 - **计时语义修正**：暂停条件收窄为**仅「页面隐藏 / 窗口失焦」**。打字、草稿非空、模型在生成都不再冻结计时；发送仍然清零重来。此前「明明没输入却变琥珀暂停」的两个可疑来源同时被切断：composer 的 `MutationObserver` 不再把程序化改动（发送后清空、占位符刷新）当作打字；草稿与打字标志只进状态，不再参与 `blockReason()`。
 - **临时诊断（已移除）**：卡片下方曾有一行 10px 探针（`xxms max · n/m >25ms · k render` + `phase/reason v/t/d/s`）。真机签核读数 `54ms max · 4/64 >25ms · 2 render`，用户判定「速度满意、可以收工」，于是连同 `MORPH_PROBE`、`.dfi-probe` 一起删除；`widget-smoke` 增加断言，防止探针常量或样式回流。
 - 验证：core 43（打字/草稿/发送三组断言改写为「不停表」「发送即新轮」）、monitor 17、widget-smoke 325、notify、auto-repeat、integration 全绿；`build.mjs --check` 通过。
+
+## 17. 第十五轮改动摘要（令牌层落地 + 跳过状态独立并持久化）
+
+前十四轮都是「调观感」，这一轮第一次动结构：把散落在规则里的设计常量收成三层令牌，并修掉两处状态语义错误。
+
+- **实测的漂移量**（`audit-tokens.mjs` 对改前代码）：**24 处字面量字号、5 处字面量圆角、24 处字面量动效时长**。字阶当时声称 6 档，实际生效 8 个值（10/11/12/12.5/13/14/15/38），15 和 38 是两处硬编码；圆角 1.5/2/6/7/10px 五个值无令牌；时长 90–1100ms 共 13 个不同值。
+- **令牌层**：`.dfi-root` 上声明 `--dfi-fs-*`（八档）、`--dfi-dur-*`（fast/base/slow/sweep/deco 五档，覆盖原 13 个值）、`--dfi-radius-track`。圆角凡是官方已有的直接改用 `--dsw-radius-sm/md/xl`（chip 7px→8px、settings box 10px→12px、switch→50%），只剩资源条另立一个。改后审计：**0 / 0 / 0**。
+- **reduced-motion 从 19 条 `!important` 改为零化令牌**：旧规则列了 19 个选择器加 `transition-duration: 0ms !important; animation: none !important`，但 `.dfi-card` / `.dfi-content` 的入场用的是 `animation:` 简写，**不在这份列表里**——所以开了「减少动态效果」后，被列出的全部冻住，两条最长（420/480ms）的入场反而照常播。现在一条规则把五个时长令牌设为 `0ms`，入场一起归零；`animation: none` 只留给两个纯装饰层。
+- **跳过状态独立成视图**：`viewKey()` 过去把 `skipped` 折进 `finished`，于是点了「跳过」的人马上被告知「你已在这个没有对话的窗口里停留 31 分钟」。现在 `skipped` 有自己的视图、自己的文案（「本轮已跳过」）、报**实际计入**的分钟数（`elapsedMs`，不是 `watchedMs`），并且不再给一个无可跳的跳过按钮。
+- **跳过可以跨刷新存活**：`client-main.js` 恢复存档时排除了 `finished` / `skipped`，等于刷新即丢弃「这一轮已经结束」。而 `expanded`、`skipArmed` 却从偏好里恢复——活下来的恰好是用户刚清掉的那部分。现在两种终态都按原样恢复，直到下次发送才开新轮。
+- 验证：core **44**（新增「skipped 快照恢复后仍是 skipped」）、monitor 17、widget-smoke **336**（新增 8 项跳过视图断言 + 1 项「任何规则不得带字面量字号」）、notify、auto-repeat、integration（新增 1 项刷新后仍是 skipped）全绿；`build.mjs --check` 通过；`audit-tokens.mjs` 0 漂移。
+
+## 18. 第十六轮（严格模式 + 官方像素鲸遮罩）
+
+需求原话：「在实时界面加一个『严格模式』开关按钮，按钮文字就是『严格模式』四个字，配一个开关控件……
+倒计时结束进入界面时必须全屏遮罩，只保留官方那个像素鲸……下面保留当前正在进行的绘画名称，以及绘画已进行多少分钟……
+开启严格模式后，不能自动跳过计时，那些跳过按钮和计时按钮都要跳过。那怎么让这个遮罩消失呢？
+在右下角放一个合适大小的按钮，按钮文字是『跳过严格模式』。点击之后就相当于重新打开这个界面，然后从五分钟重新开始计时。」
+（「绘画」按 DSH 语境还原为「会话」。）
+
+- **官方像素鲸是复用，不是重画**：图源是 `@deepseek-ai/dsh-client-ui-brand-official` 的 `breach-atlas.webp`
+  （2304×1296，137 帧 @ 192×108，12 列）。逐字节复制到 `lib/assets/breach-atlas.webp`
+  （189208 字节，SHA256 `6AB7C778…EAF63`），由 `build-atlas.mjs` 转成 base64 data URL 写进 `lib/whale-atlas.js`。
+  `verify/whale.test.mjs` 断言「内嵌 data URL 解码后与 vendored 文件逐字节相同」，所以不存在「看起来像」的中间态。
+- **通道语义从官方源码读出来、并用合成图集验证**：红通道＝点半径，绿通道＝覆盖度（alpha 在这张图集里恒为 255）。
+  官方第一次播放是**点阵**、第二次是**代码字**；用户要求「都要」，所以遮罩按轮交替两种官方填充，第一轮固定是点阵像素鲸。
+- **共 12 处改动**：新增 `lib/whale.js`（渲染器）、`lib/whale-atlas.js`（生成物）、`build-atlas.mjs`（生成脚本）、
+  `lib/assets/breach-atlas.webp`（官方图集）；`lib/widget.js` 加严格模式开关行、全屏遮罩、按严格模式隐藏提醒卡与跳过/重计按钮；
+  `lib/client-main.js` 加 `getSessionTitle`／`getStrictMode`／`setStrictMode` 并把渲染器注入 widget、严格模式下跳过自动再来；
+  `build.mjs` 纳入两个新模块并剥离模块间 `import`。
+- **为什么渲染器由 api 注入而不是 import**：`widget.js` 既被 unit 测试单独加载，又被 `build.mjs` 拼进一个函数体；
+  相对 import 在第二种场合会变成悬空名字。改成 `api.attachWhale` + `api.whaleAtlasUrl` 后，两种场合都成立。
+- **三条硬约束各有独立判据**：`widget-smoke` 断言遮罩里**只有一个按钮**且没有「重新计时」文案、Escape 不关遮罩；
+  `strict-smoke` 用同一场景对照证明「strict 开＝到点 30 分钟仍 finished，strict 关＝2 分钟后自动再来」；
+  `render-smoke` 在真实 Chromium 里量「遮罩 = 1280×800 @ (0,0)」「卡片 display:none」「退出按钮在右下 24px」。
+- **反向变异（`verify/mutation.mjs`，10 项）**：首次运行时它自己抓出**三处无效断言**——
+  ①变异只改源文件不重建 bundle，读 bundle 的测试看不到改动；②「通道读错」用像素数判别无效（红通道本来就限定在剪影内，
+  换通道照样出形状）；③会话名解析只断言了源码里的正则字符串。修正后 10 项全部能被对应断言抓住。
+- **验证**：core 44、monitor 17、widget-smoke **382**、whale **20**、notify、auto-repeat、strict-smoke、
+  integration-smoke、**render-smoke（真实 Chromium，明暗两套：pass1=11700 px / pass2=28697 px）**、
+  audit-tokens 0 漂移、`build.mjs --check` 与 `build-atlas.mjs --check` 均通过、mutation 10/10。
+- **未验证**：真机（用户桌面里的 DSH 窗口）观感与手感未由用户确认；本轮只做到「真实 Chromium 里的几何与像素」。
+
+## 19. 第十七轮（严格模式第二轮反馈：会话列表 / 两个出口 / 开关位置）
+
+用户三条反馈：①「有时同事会有多个会话，但界面只列出一个会话，需要把多个会话都列出来」；
+②「退出严格模式可能不准确，需要再加一个按钮，让我选择是退出本轮还是退出所有严格模式」；
+③「严格模式设置应该放在设置里面……不应该在我缩小为弹窗、展开的时候就看到严格模式的按钮」。
+随后补充：每行的用时必须是**该会话自己的**「深度求索中，用时 19分25秒 ···」，并去掉中间那句停留分钟。
+
+- **开关移入设置**：严格模式行从卡片正面移到「设置 → 外观与其他」，并且整行仍是 `role="switch"`。
+  切换后自动收起设置面板（它的效果正好发生在被面板盖住的表面上）。
+  `widget-smoke` 断言：卡片正面与收缩胶囊都**不得**出现「严格模式」字样（用 `uiText()` 读，排除
+  in-tree `<style>` 里的注释，避免假阳性）。
+- **列表只列运行中的会话**：数据来自 `shell.overlay` 注入的 `useSessions` + `useSessionStatus`，
+  与侧边栏自己那套判定一致（`status.running ?? session.running`）。当前会话按
+  `retainedBy.mainView > 0` 判定并排在最前；空白会话列出来但显示「未命名会话」；已停下的会话不列。
+- **每行是它自己的用时**：官方的「深度求索中，用时 {duration} ···」读的是该会话的 turn 时间轴
+  （`turn.start.time`），overlay 座位拿不到；官方 `useSessionStatus` 只给
+  `running / pendingInteraction / completionUnread`。所以插件在 `running` 的上升沿记起点、写进偏好，
+  刷新不把还在干活的会话打回 1 秒。格式与文案对齐官方的 `duration.compactMinutes` / `compactSeconds`。
+- **两个出口**：「跳过本轮」（重计 5 分钟，**保留**严格模式）与「退出所有严格模式」
+  （重计 5 分钟，**关掉**严格模式）。后者是次级样式，不是最容易被点到的那个。
+- **中间那句消失了**：`strict.line` / `.dfi-maskLine` / `.dfi-maskMins` 全部删除，
+  `render-smoke` 断言遮罩里不存在 `.dfi-maskTitle` 与 `.dfi-maskLine` 节点。
+- **顺手修掉的真 bug**：`runningSessionsFrom` 在没有注入 hooks 时调用 `syncRunStarts([])`，
+  会把所有已测到的起点清空 —— 于是任何一次没有 props 的渲染都会让在线会话的用时回到 1 秒。
+  现在无 hooks 时只返回空列表，不动已记录的状态。
+- **验证**：core 44、monitor 17、widget-smoke **400**、whale 20、notify、auto-repeat、strict-smoke、
+  integration-smoke、**render-smoke（真实 Chromium，明暗两套，三行分别读出 19分25秒 / 3分12秒 / 25秒）**、
+  audit-tokens 0 漂移、两个 `--check` 通过、**mutation 14/14**（新增两个出口、每行用时、开关位置、
+  已停下会话、起点记录）。
+- **仍未验证**：真机观感；以及「多会话同时运行」在真实 DSH 里是否真能一次看到多行 —— 判据用的是
+  官方会话存储的合成状态，真实多会话场景需用户真机确认。
+
+## 20. 第十八轮（无会话状态 / 活计时 / 提问必须让位）
+
+用户三条反馈：①遮罩里没有会话时不能显示「未命名会话 · 深度求索中，用时 1秒」，要一个官方口径的
+「空闲中」状态；②遮罩上的计时不能停，也要覆盖没有会话的情形；③有提问时（`ask_user_question`、审批）
+用户完全看不到，要求「跳过严格模式，让提问显示出来」。
+
+- **删掉凭空造的那一行**：`runningSessionsFrom` 现在只收 `running` 或 `pendingInteraction` 的会话。
+  之前空列表会兜底塞一行 `untitled`，读起来像有个会话正在生成。空白且没在跑的会话一律不列。
+- **空闲行**：没有活跃会话时，遮罩渲染一行「空闲中」+「已停留 3分02秒」，从遮罩出现那一刻起计时。
+  文案对齐官方「深度求索中，用时 …」的句式；`data-idle` 标记让状态点用中性色而不是业务蓝。
+- **活计时**：遮罩自带 1 秒脉冲（`maskClock` 状态）。到点后状态机不再 publish，墙钟又只有 30 秒一跳，
+  所以以前计时看着是冻住的。现在每会话行与空闲行都每秒重算；等待中的会话从 `pendingSince` 计时，
+  不从已经停下的 `running` 起点计时。
+- **提问让位**：判断用官方 `SessionStatus.pendingInteraction`（侧栏红点、composer 提问卡读的同一个事实）。
+  遮罩期间出现 → 走「跳过本轮」同一条出口（关遮罩、重计 5 分钟、严格模式保持开启），**不替你回答、不跳过问题**。
+  非遮罩期间 → 一次系统通知 + 提示音（受通知/提示音开关控制），卡片加一行「有提问待回答」，
+  收缩胶囊把系统时间换成「待回答」，状态点转琥珀。
+- **顺带修掉的隐患**：`useSessions` / `useSessionStatus` 以前是在遮罩渲染函数里调用的，等于 hook 数量
+  随「遮罩是否出现」变化；现在每次渲染固定位置读一次。
+- **验证**：core 44、monitor 17、widget-smoke **422**（新增空闲行、空闲秒表每秒+3 秒、行用时 25秒→30秒、
+  待回答让位 + `reset` + 通知、胶囊「待回答」、英文 Idle）、whale 20、notify、auto-repeat、strict-smoke、
+  integration-smoke（新增：空白空闲会话不出行、运行与会话各一行且文案不同、`pendingStarts` 落盘）、
+  **render-smoke（真实 Chromium，明暗两套）**、audit-tokens、两个 `--check`、**mutation 17/17**
+  （新增「空闲时凭空造行」「有提问时遮罩不让位」两处变异）。
+- **仍未验证**：真机观感；真实 DSH 里提问的 `pendingInteraction` 与遮罩的先手顺序（1 秒脉冲内让位），
+  以及通知权限已授时是否真的弹系统通知 —— 需用户真机确认。

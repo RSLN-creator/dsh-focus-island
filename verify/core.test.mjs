@@ -709,6 +709,35 @@ test('finished snapshot restores as finished and sanitizes watched time', () => 
   assert.equal(h.core.getState().watchedMs, 25 * MIN)
 })
 
+test('skipped snapshot restores as skipped, not as a fresh countdown', () => {
+  /* Regression: client-main used to exclude `skipped` (and `finished`) from
+   * the restore call, so a reload restarted the countdown from zero and the
+   * reminder could fire again right after the user dismissed it. The state
+   * machine always supported restoring a terminal phase; the boot path was what
+   * dropped it. This pins the state-machine half so the boot half cannot
+   * silently lose it again. */
+  const a = harness({ durationMinutes: 45 })
+  a.tick()
+  a.advance(10 * MIN)
+  a.tick()
+  a.core.skipArm()
+  const skipped = a.core.skipConfirm()
+  assert.equal(skipped.phase, PHASE.SKIPPED)
+
+  const b = harness({ start: 9_000_000 })
+  b.core.restore(JSON.parse(JSON.stringify(a.core.snapshot())))
+  const s = b.core.getState()
+  assert.equal(s.phase, PHASE.SKIPPED, 'a skipped round stays skipped across a restore')
+  assert.equal(s.elapsedMs, 10 * MIN, 'the counted time survives')
+  assert.equal(s.skipArmed, false)
+
+  b.advance(30 * MIN)
+  assert.equal(b.tick().phase, PHASE.SKIPPED, 'time alone never un-skips a round')
+
+  const afterSend = b.core.onUserSend()
+  assert.equal(afterSend.phase, PHASE.COUNTING, 'the next send is what starts a new round')
+})
+
 test('restore tolerates garbage and rejects foreign versions', () => {
   const h = harness()
   h.tick()
