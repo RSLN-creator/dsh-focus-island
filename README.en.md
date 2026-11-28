@@ -21,7 +21,7 @@ The plugin has no build framework or runtime npm dependencies. Its Client half i
 | Send resets | Enter (without Shift) in the composer or the main Send button resets the timer. |
 | Auto-repeat | An ignored reminder can start a new round after a configurable delay (0–10 minutes; default 2; 0 disables it). Interacting with the island acknowledges the reminder. |
 | Pause conditions | A hidden page or an unfocused window pauses the timer. Returning resumes from the frozen value. |
-| Persistence | Preferences and timer snapshots are stored locally. A **reload inside the same run** resumes the stored round, including a finished or skipped one; **closing the app and opening it again** is a cold start, which counts from zero instead of reopening yesterday's reminder card (decided by the 5-second heartbeat `pulseAt`: older than two minutes means a new run). |
+| Persistence | Preferences and timer snapshots are stored locally. A **reload inside the same run** resumes the stored round, including a finished or skipped one; **closing the app and opening it again** is a cold start, which counts from zero instead of reopening yesterday's reminder card (decided by the page-session marker in `sessionStorage`: a reload keeps it, closing the app loses it; where that storage is unavailable the 5-second heartbeat `pulseAt` decides, and older than two minutes means a new run). |
 | Notifications | Desktop notifications and a synthesized Web Audio chime are independently configurable and enabled by default. |
 | Strict mode | When enabled, the deadline displays a full-screen mask with the official pixel whale and the running or pending sessions. It does not offer ordinary skip, collapse, or auto-repeat actions. The two explicit exits either keep strict mode enabled or turn it off; both restart a five-minute round. A pending question automatically yields the screen so it can be answered. |
 
@@ -154,5 +154,6 @@ At the deadline, the plugin can send a browser `Notification` and play a short s
 ## License
 
 MIT
+
 
 

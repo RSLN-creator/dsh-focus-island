@@ -332,10 +332,11 @@ Host 半（资源路由）验证：bundle 关/开一次后，
 
 用户四条：①继续优化；②开机后刚开软件会直接进「已跳过」界面，应该从零计时；③提醒间隔要能填 1–180 任意整数（预设 5 倍数不动）；④跳过图标只要三角形、去掉右侧竖杠，且与齿轮矢量同样大。
 
-- **冷启动从零**：每 5 秒写快照时附带心跳 `pulseAt`；开机读快照，`now - pulseAt > 120 s`（或没有心跳）判定为冷启动 → `core.reset()` 从零开始，不再把上一轮的 `finished/skipped` 卡重摆出来。同一进程内刷新心跳只有几秒，仍照旧恢复（保留住当初「刷新别丢掉已结束那一轮」的修复）。测试：`integration-smoke` 三次启动同一份存储，分别用 1 秒心跳（保持 skipped）、10 分钟心跳（变 counting 且 elapsed < 2 s）、无心跳（按冷启动）。
+- **冷启动从零**：判据先是 `sessionStorage` 里的页面会话标记（刷新保留、关掉软件即消失），不可用时退回每 5 秒写一次的 `pulseAt` 心跳（>120 s 视为新一次启动）。冷启动 → `core.reset()` 从零开始，不再把上一轮的 `finished/skipped` 卡重摆出来；同一页面内的刷新仍照旧恢复（保留住当初「刷新别丢掉已结束那一轮」的修复）。测试：`integration-smoke` 对同一份存储做四次启动——有标记（保持 skipped）、无标记（变 counting 且 elapsed < 2 s）、`sessionStorage` 抛错 + 1 秒心跳（保持 skipped）、抛错 + 10 分钟心跳（按冷启动）。
 - **1–180 分钟**：`core.DURATION_MIN_MINUTES` 与 widget 的 `DUR_MIN` 同步从 5 降到 1；± 仍按 5 分钟步进、六个预设不动。widget 测试新增：输入 1/37/12 被接受并作用到 core，输入 0 夹到 1（不再是 5），181 夹到 180，`step` 仍为 5。
 - **跳过图标**：`skip` 改用与齿轮同一个 24 格 viewBox、同样 14px 渲染、同样 2px 描边，路径只剩一个闭合三角形（`M7.6 3.4L21.5 12 7.6 20.6z`），右侧竖杠删除。用真实 Chromium 渲 14px 与 4× 对照图确认两者视觉尺寸一致。测试：skip 与 gear 的 viewBox/宽高/描边相等、skip 只有一条子路径且无竖杠。
 - **优化（①）**：严格遮罩期间（`strictMode && phase === 'finished'`）跳过每秒一次的存在探测（composer 文本读取 + 按钮扫描），那块屏幕被遮住、输入框不可达，探测纯属在主线程上是白工；遮罩让位或退出会 reset，下一个脉冲立刻重新同步，状态最多滞后 1 秒。
 - 版本 0.3.1 → **0.3.2**。
 - **验证**：core 44、widget-smoke **442**、integration（新增冷启动/热刷新/无心跳三例）、strict、notify、auto-repeat、monitor 17、whale 20、render-smoke（真实 Chromium，连跑两次通过）、mutation 17/17、audit-tokens 0 漂移、`build --check` 与 `build-atlas --check` 一致。
 - **一次抖动如实记下**：改动初期 render-smoke 有一轮报 15 项失败，重跑同一份代码连续两次全绿，未能复现；判据未放宽，后续再遇到会按真实缺陷查。
+

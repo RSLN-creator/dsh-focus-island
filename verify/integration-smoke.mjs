@@ -26,6 +26,7 @@ const intervals = []
 const intervalDelays = []
 const listeners = new Map()
 const storage = new Map()
+const pageStorage = new Map()
 
 /* Layout-read counters: the whole point of the idle-time fix is that a pulse
  * with nothing changed must not force style/layout work. */
@@ -83,6 +84,13 @@ globalThis.window = {
     getItem: (key) => (storage.has(key) ? storage.get(key) : null),
     setItem: (key, value) => { storage.set(key, String(value)) },
     removeItem: (key) => { storage.delete(key) },
+  },
+  /* Session storage: survives a reload of the same page, dies with the page.
+   * The boot path uses its marker to tell "F5" from "closed the app". */
+  sessionStorage: {
+    getItem: (key) => (pageStorage.has(key) ? pageStorage.get(key) : null),
+    setItem: (key, value) => { pageStorage.set(key, String(value)) },
+    removeItem: (key) => { pageStorage.delete(key) },
   },
   fetch: () => Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) }),
 }
@@ -257,9 +265,10 @@ assert.ok(reset.elapsedMs <= 150, `send must reset elapsed (got ${reset.elapsedM
  * reminder could come back seconds later. Then restoring them unconditionally
  * brought yesterday's reminder back when the app was opened the next morning.
  *
- * The two cases are told apart by the heartbeat the persistence pulse writes
- * (`pulseAt`). Proving it needs two boots against the same storage with
- * different heartbeat ages, which no unit test can see. */
+ * A reload keeps the page-session marker in `sessionStorage`; closing the app
+ * loses it. Where that storage is unavailable the 5 s heartbeat decides instead.
+ * Both rules are only visible across two boots of the same process, so this is
+ * the only place they can be proven. */
 function storedRound(pulseAgeMs) {
   return JSON.stringify({
     v: 1,
@@ -275,8 +284,12 @@ function storedRound(pulseAgeMs) {
   })
 }
 
-/** Boot the plugin once against the current storage; returns what it persisted. */
-function bootAndReadState() {
+/**
+ * Boot the plugin once against the current storage; returns what it persisted.
+ * @param {boolean} [newRun] Drop the page-session marker first, as closing the app does.
+ */
+function bootAndReadState(newRun) {
+  if (newRun === true) pageStorage.clear()
   const before = intervals.length
   const booted = createFakeCtx()
   plugin.apply(booted)
@@ -294,22 +307,36 @@ function bootAndReadState() {
   return state
 }
 
-// A heartbeat a second old = a reload inside the same run: keep the round.
+// Same page session = a reload: the stored round is kept, even a terminal one.
 storage.set('dsh-focus-island:v1:state', storedRound(1000))
 const afterReload = bootAndReadState()
 assert.notEqual(afterReload, null, 'the reload must persist a snapshot')
 assert.equal(afterReload.phase, 'skipped', `a skipped round must survive a reload (got ${afterReload.phase})`)
 assert.equal(afterReload.elapsedMs, 8 * 60 * 1000, 'the time counted before skipping must survive the reload')
 
-// A heartbeat ten minutes old = the app was closed: start a fresh round.
-storage.set('dsh-focus-island:v1:state', storedRound(10 * 60 * 1000))
-const afterColdStart = bootAndReadState()
+// No page-session marker = the app was started again: count from zero, even
+// though the heartbeat is only a second old.
+storage.set('dsh-focus-island:v1:state', storedRound(1000))
+const afterColdStart = bootAndReadState(true)
 assert.equal(afterColdStart.phase, 'counting', `a cold start must begin counting, not reopen the old card (got ${afterColdStart.phase})`)
 assert.ok(afterColdStart.elapsedMs < 2000, `a cold start must count from zero (got ${afterColdStart.elapsedMs} ms)`)
 
+/* Fallback for a runtime where `sessionStorage` throws (private mode): the
+ * heartbeat decides. A fresh one still means "reload", an old one "new run". */
+const sessionStorageRef = globalThis.window.sessionStorage
+const throwing = { getItem() { throw new Error('denied') }, setItem() { throw new Error('denied') }, removeItem() {} }
+globalThis.window.sessionStorage = throwing
+storage.set('dsh-focus-island:v1:state', storedRound(1000))
+const fallbackReload = bootAndReadState()
+assert.equal(fallbackReload.phase, 'skipped', 'without sessionStorage a fresh heartbeat still means reload')
+storage.set('dsh-focus-island:v1:state', storedRound(10 * 60 * 1000))
+const fallbackCold = bootAndReadState()
+assert.equal(fallbackCold.phase, 'counting', 'without sessionStorage an old heartbeat means a new run')
+globalThis.window.sessionStorage = sessionStorageRef
+
 // A snapshot from a build without the heartbeat cannot prove it is current.
 storage.set('dsh-focus-island:v1:state', storedRound(null))
-const afterLegacy = bootAndReadState()
+const afterLegacy = bootAndReadState(true)
 assert.equal(afterLegacy.phase, 'counting', 'a heartbeat-less snapshot is treated as a cold start')
 
 // --- session facts: running + waiting on you, and nothing else --------------
